@@ -1,28 +1,37 @@
-//
-//  ContentView.swift
-//  GAMI iOS
-//
-//  Created by 김준표 on 11/28/25.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @State private var goNext = false
+
     var body: some View {
-        VStack(alignment: .center){
-            
-            Image("logo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 166, height: 92)
-                .padding(.vertical, 391)
-                
-            Spacer()
+        NavigationStack {
+            ZStack {
+             a   VStack(alignment: .center) {
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 166, height: 92)
+                        .padding(.vertical, 391)
+
+                    Spacer()
+                }
+
+                NavigationLink(
+                    "",
+                    destination: StartView(),
+                    isActive: $goNext
+                )
+                .hidden()
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+                    goNext = true
+                }
+            }
         }
-        
     }
 }
+
 #Preview {
     ContentView()
 }
-

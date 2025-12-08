@@ -17,30 +17,43 @@ struct StartView: View {
                 .padding(.top, 202)
             
             
-            Text("멘토와 멘티를 연결하는 맞춤형 멘토링 서비스")
-            .font(
-            Font.custom("Pretendard", size: 20)
-            .weight(.semibold)
-            )
-            .multilineTextAlignment(.center)
-            .frame(width: 194, height: 48, alignment: .center)
-    
+            Text("")
+                .frame(width: 194, height: 48)
+                .overlay(
+                    (
+                        Text("멘토")
+                            .foregroundColor(Color(red: 0.75, green: 0.66, blue: 1))
+                        + Text("와 ")
+                            .foregroundColor(.black)
+                        + Text("멘티")
+                            .foregroundColor(Color(red: 0.45, green: 0.66, blue: 1))
+                        + Text("를 연결하는 맞춤형 멘토링 서비스")
+                            .foregroundColor(.black)
+                    )
+                    .font(Font.custom("Pretendard", size: 20).weight(.semibold))
+                    .multilineTextAlignment(.center)
+                )
+            
+
             .padding(.top, 83)
+            .padding(.horizontal, 105)
         
             Spacer()
             
-            Text("로그인")
-                .font(
-                Font.custom("Pretendard", size: 18)
-                .weight(.bold)
-                )
-                .foregroundColor(.white)
-                .padding(.horizontal, 135)
-                .padding(.vertical, 14)
-                .background(Color(red: 0.75, green: 0.66, blue: 1, opacity: 1))
-            .cornerRadius(12)
-            .padding(.bottom, 15)
-            
+            Button(action:{
+            }, label:{
+                Text("로그인")
+                    .font(
+                    Font.custom("Pretendard", size: 18)
+                    .weight(.bold)
+                    )
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 135)
+                    .padding(.vertical, 14)
+                    .background(Color(red: 0.75, green: 0.66, blue: 1, opacity: 1))
+                .cornerRadius(12)
+                .padding(.bottom, 15)
+            })
             HStack(alignment: .center, spacing: 0) {
                 
                 Rectangle()
@@ -64,19 +77,23 @@ struct StartView: View {
             }
             .padding(.bottom, 10)
             
-            Text("회원가입")
-                .font(
-                Font.custom("Pretendard", size: 18)
-                .weight(.bold)
-                )
-                .foregroundColor(.white)
-                .padding(.horizontal, 135)
-                .padding(.vertical, 14)
-                .background(Color(red: 0.45, green: 0.66, blue: 1, ))
-            .cornerRadius(12)
-            .padding(.bottom, 32)
+            Button(action: {
+            }, label: {
+                Text("회원가입")
+                    .font(
+                    Font.custom("Pretendard", size: 18)
+                    .weight(.bold)
+                    )
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 135)
+                    .padding(.vertical, 14)
+                    .background(Color(red: 0.45, green: 0.66, blue: 1))
+                .cornerRadius(12)
+                .padding(.bottom, 32)
+                
+            })
+
             }
-            
 
         
         .navigationBarBackButtonHidden(true)

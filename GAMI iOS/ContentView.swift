@@ -6,14 +6,12 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-              VStack(alignment: .center) {
+              VStack(alignment: .center, spacing: 0) {
                     Image("logo")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 166, height: 92)
                         .padding(.vertical, 391)
-
-                    Spacer()
                 }
 
                 NavigationLink(

@@ -6,7 +6,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-             a   VStack(alignment: .center) {
+              VStack(alignment: .center) {
                     Image("logo")
                         .resizable()
                         .scaledToFit()

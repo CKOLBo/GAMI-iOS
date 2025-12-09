@@ -29,19 +29,26 @@ struct LoginView: View {
                 )
                 .padding(.horizontal, 31)
                 .padding(.bottom, 20)
-            
-            Text("비밀번호")
-                .font(Font.custom("Pretendard", size: 16))
-                .foregroundColor(.gray)
-                .padding(.vertical, 20)
-                .padding(.horizontal, 18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.gray, lineWidth: 1)
-                )
-                .padding(.horizontal, 31)
+            ZStack(alignment: .trailing){
+                Text("비밀번호")
+                    .font(Font.custom("Pretendard", size: 16))
+                    .foregroundColor(.gray)
+                    .padding(.vertical, 20)
+                    .padding(.horizontal, 18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray, lineWidth: 1)
+                    )
+                    .padding(.horizontal, 31)
+                Image("open eyes")
+                    .padding(.trailing, 76)
+                Image("Close eyes")
+                    .padding(.trailing, 40)
+                   
+            }
+
             
             HStack(){
                 Text("비밀번호를 잊으셨나요?")
@@ -59,6 +66,7 @@ struct LoginView: View {
                     .foregroundColor(Color(.blue))
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.trailing, 31)
+                    .padding(.top, 8)
             }
            
         }

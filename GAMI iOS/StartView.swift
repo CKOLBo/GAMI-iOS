@@ -48,6 +48,7 @@ struct StartView: View {
                     .font(
                     Font.custom("Pretendard", size: 18)
                     .weight(.bold)
+                  
                     )
                     .foregroundColor(.white)
                     .padding(.horizontal, 135)

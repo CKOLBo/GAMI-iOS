@@ -40,8 +40,10 @@ struct StartView: View {
         
             Spacer()
             
-            Button(action:{
-            }, label:{
+            
+            NavigationLink{
+                LoginView()
+            } label:{
                 Text("로그인")
                     .font(
                     Font.custom("Pretendard", size: 18)
@@ -53,7 +55,8 @@ struct StartView: View {
                     .background(Color(red: 0.75, green: 0.66, blue: 1, opacity: 1))
                 .cornerRadius(12)
                 .padding(.bottom, 15)
-            })
+            }
+
             HStack(alignment: .center, spacing: 0) {
                 
                 Rectangle()
@@ -76,7 +79,7 @@ struct StartView: View {
                 .padding(.leading, 24)
             }
             .padding(.bottom, 10)
-            
+
             Button(action: {
             }, label: {
                 Text("회원가입")
@@ -101,7 +104,9 @@ struct StartView: View {
     }
 }
 #Preview {
-    StartView()
+    NavigationStack{
+        StartView()
+    }
 }
 
 

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct LoginView: View {
+    @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Image("logo")
@@ -83,6 +84,34 @@ struct LoginView: View {
                 .background(Color(red: 0.75, green: 0.66, blue: 1, opacity: 1))
             .cornerRadius(12)
             .padding(.bottom, 32)
+        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing : 0) {
+                        ZStack{
+                            Text("돌아가기")
+                                .font(
+                                    Font.custom("Pretendard", size: 16)
+                                )
+                                .foregroundColor(Color("Gray2"))
+                            
+                            Image("back")
+                                .padding(.trailing, 15)
+                                .padding(.bottom, 10)
+                                
+                                
+                                
+                        }
+                      
+                        
+                        
+                    }
+                }
+            }
         }
         
     }

@@ -18,7 +18,7 @@ struct LoginView: View {
 
             
             Text("이메일")
-                .font(Font.custom("Pretendard", size: 16))
+                .font(Font.custom("Pretendard-Medium", size: 16))
                 .foregroundColor(.gray)
                 .padding(.vertical, 20)
                 .padding(.horizontal, 18)
@@ -32,7 +32,7 @@ struct LoginView: View {
                 .padding(.bottom, 20)
             ZStack(alignment: .trailing){
                 Text("비밀번호")
-                    .font(Font.custom("Pretendard", size: 16))
+                    .font(Font.custom("Pretendard-Medium", size: 16))
                     .foregroundColor(.gray)
                     .padding(.vertical, 20)
                     .padding(.horizontal, 18)
@@ -54,7 +54,7 @@ struct LoginView: View {
             HStack(){
                 Text("비밀번호를 잊으셨나요?")
                     .font(
-                        Font.custom("Pretendard", size: 14)
+                        Font.custom("Pretendard-Medium", size: 14)
                     )
                     .foregroundColor(Color(.gray))
                     .padding(.leading, 31)
@@ -62,7 +62,7 @@ struct LoginView: View {
                 
                 Text("비밀번호 찾기")
                     .font(
-                        Font.custom("Pretendard", size: 14)
+                        Font.custom("Pretendard-Medi", size: 14)
                     )
                     .foregroundColor(Color(.blue))
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -75,8 +75,9 @@ struct LoginView: View {
         VStack(alignment: .center, spacing: 0){
             Text("로그인")
                 .font(
-                Font.custom("Pretendard", size: 18)
-                .weight(.bold)
+                Font.custom("Pretendard-Bold", size: 18)
+                
+                
                 )
                 .foregroundColor(.white)
                 .padding(.horizontal, 135)
@@ -95,7 +96,7 @@ struct LoginView: View {
                         ZStack{
                             Text("돌아가기")
                                 .font(
-                                    Font.custom("Pretendard", size: 16)
+                                    Font.custom("Pretendard-Medium", size: 16)
                                 )
                                 .foregroundColor(Color("Gray2"))
                             

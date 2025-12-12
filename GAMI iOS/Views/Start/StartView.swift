@@ -30,7 +30,7 @@ struct StartView: View {
                         + Text("를 연결하는 맞춤형 멘토링 서비스")
                             .foregroundColor(.black)
                     )
-                    .font(Font.custom("Pretendard", size: 20).weight(.semibold))
+                    .font(Font.custom("Pretendard-SemiBold", size: 20))
                     .multilineTextAlignment(.center)
                 )
             
@@ -46,8 +46,7 @@ struct StartView: View {
             } label:{
                 Text("로그인")
                     .font(
-                    Font.custom("Pretendard", size: 18)
-                    .weight(.bold)
+                    Font.custom("Pretendard-Bold", size: 18)
                   
                     )
                     .foregroundColor(.white)
@@ -68,8 +67,8 @@ struct StartView: View {
                 .padding(.leading, 24)
                 
                 Text("처음이라면?")
-                    .font(Font.custom("Pretendard", size: 14)
-                        .weight(.medium))
+                    .font(Font.custom("Pretendard-Medium", size: 14)
+                        )
                     .foregroundColor(.gray)
 
                 
@@ -85,8 +84,8 @@ struct StartView: View {
             }, label: {
                 Text("회원가입")
                     .font(
-                    Font.custom("Pretendard", size: 18)
-                    .weight(.bold)
+                    Font.custom("Pretendard-Bold", size: 18)
+                   
                     )
                     .foregroundColor(.white)
                     .padding(.horizontal, 135)

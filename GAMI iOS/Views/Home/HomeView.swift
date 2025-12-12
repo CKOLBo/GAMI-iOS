@@ -8,11 +8,22 @@
 import SwiftUI
 
 struct HomeView: View{
+    
+    init() {
+        for family in UIFont.familyNames {
+            print("== \(family) ==")
+            for name in UIFont.fontNames(forFamilyName: family) {
+                print(name)
+            }
+        }
+    }
+    
     var body: some View{
         ScrollView{
             VStack(alignment: .leading, spacing: 0){
                 Text("홈")
-                    .font(.custom( "Pretendard-ExtraBold", size: 30))
+                    .font(.custom( "Pretendard-Bold", size: 30)
+                        )
                     .padding(.top,60)
                    
                 

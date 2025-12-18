@@ -40,7 +40,7 @@ struct LoginView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color(red: 0.75, green: 0.66, blue: 1, opacity: 1))
+                    .background(Color("Purple1"))
                     .cornerRadius(12)
             }
             .buttonStyle(.plain)

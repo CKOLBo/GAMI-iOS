@@ -139,7 +139,7 @@ struct HomeView: View{
                             Text("멘토")
                                 .foregroundColor(Color("Blue1"))
 
-                            Text("를 찾으로 가볼까요?")
+                            Text("를 찾으러 가볼까요?")
                                 .foregroundColor(Color("Gray1"))
                         }
                     }

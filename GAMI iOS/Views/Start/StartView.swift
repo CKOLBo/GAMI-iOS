@@ -1,5 +1,5 @@
 //
-//  Untitled.swift
+//  StartView.swift
 //  GAMI iOS
 //
 //  Created by 김준표 on 12/4/25.
@@ -9,14 +9,13 @@ import SwiftUI
 
 struct StartView: View {
     var body: some View {
-        VStack(alignment: .center, spacing: 0){
+        VStack(alignment: .center, spacing: 0) {
             Image("logo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 160, height: 128)
                 .padding(.top, 202)
-            
-            
+
             Text("")
                 .frame(width: 194, height: 48)
                 .overlay(
@@ -33,80 +32,62 @@ struct StartView: View {
                     .font(Font.custom("Pretendard-SemiBold", size: 20))
                     .multilineTextAlignment(.center)
                 )
-            
+                .padding(.top, 83)
+                .padding(.horizontal, 105)
 
-            .padding(.top, 83)
-            .padding(.horizontal, 105)
-        
             Spacer()
-            
-            
-            NavigationLink{
+
+            NavigationLink {
                 LoginView()
-            } label:{
+            } label: {
                 Text("로그인")
-                    .font(
-                    Font.custom("Pretendard-Bold", size: 18)
-                  
-                    )
+                    .font(Font.custom("Pretendard-Bold", size: 18))
                     .foregroundColor(.white)
                     .padding(.horizontal, 135)
                     .padding(.vertical, 14)
                     .background(Color(red: 0.75, green: 0.66, blue: 1, opacity: 1))
-                .cornerRadius(12)
-                .padding(.bottom, 15)
+                    .cornerRadius(12)
+                    .padding(.bottom, 15)
             }
 
             HStack(alignment: .center, spacing: 0) {
-                
-                Rectangle()
-                .foregroundColor(Color(red: 0.72, green: 0.74, blue: 0.78))
-                .frame(width: 128.00296, height: 1)
-                .background(Color(red: 0.72, green: 0.74, blue: 0.78))
-                .padding(.trailing, 12)
-                .padding(.leading, 24)
-                
-                Text("처음이라면?")
-                    .font(Font.custom("Pretendard-Medium", size: 14)
-                        )
-                    .foregroundColor(.gray)
-
-                
                 Rectangle()
                     .foregroundColor(Color(red: 0.72, green: 0.74, blue: 0.78))
-                .frame(width: 128.00296, height: 1)
-                .padding(.trailing, 12)
-                .padding(.leading, 24)
+                    .frame(width: 128.00296, height: 1)
+                    .background(Color(red: 0.72, green: 0.74, blue: 0.78))
+                    .padding(.trailing, 12)
+                    .padding(.leading, 24)
+
+                Text("처음이라면?")
+                    .font(Font.custom("Pretendard-Medium", size: 14))
+                    .foregroundColor(.gray)
+
+                Rectangle()
+                    .foregroundColor(Color(red: 0.72, green: 0.74, blue: 0.78))
+                    .frame(width: 128.00296, height: 1)
+                    .padding(.trailing, 12)
+                    .padding(.leading, 24)
             }
             .padding(.bottom, 10)
 
             Button(action: {
             }, label: {
                 Text("회원가입")
-                    .font(
-                    Font.custom("Pretendard-Bold", size: 18)
-                   
-                    )
+                    .font(Font.custom("Pretendard-Bold", size: 18))
                     .foregroundColor(.white)
                     .padding(.horizontal, 135)
                     .padding(.vertical, 14)
                     .background(Color(red: 0.45, green: 0.66, blue: 1))
-                .cornerRadius(12)
-                .padding(.bottom, 32)
-                
+                    .cornerRadius(12)
+                    .padding(.bottom, 32)
             })
-
-            }
-
-        
+        }
         .navigationBarBackButtonHidden(true)
-        
     }
 }
+
 #Preview {
-    NavigationStack{
+    NavigationStack {
         StartView()
     }
 }
-
-

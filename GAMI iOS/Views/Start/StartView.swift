@@ -77,7 +77,7 @@ struct StartView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 135)
                     .padding(.vertical, 14)
-                    .background(Color(red: 0.45, green: 0.66, blue: 1))
+                    .background(Color("Blue1"))
                     .cornerRadius(12)
                     .padding(.bottom, 32)
             })

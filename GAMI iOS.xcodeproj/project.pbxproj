@@ -10,22 +10,9 @@
 		E5BD52F72ED967DF00B41962 /* GAMI iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "GAMI iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E59CE6732EEBC07E003A84C3 /* Exceptions for "GAMI iOS" folder in "GAMI iOS" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"GAMI-iOS-Info.plist",
-			);
-			target = E5BD52F62ED967DF00B41962 /* GAMI iOS */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		E5BD52F92ED967DF00B41962 /* GAMI iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				E59CE6732EEBC07E003A84C3 /* Exceptions for "GAMI iOS" folder in "GAMI iOS" target */,
-			);
 			path = "GAMI iOS";
 			sourceTree = "<group>";
 		};

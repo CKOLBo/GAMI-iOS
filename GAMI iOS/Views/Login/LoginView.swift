@@ -34,7 +34,9 @@ struct LoginView: View {
 
             Spacer(minLength: 0)
 
-            Button(action: {}) {
+            NavigationLink{
+                HomeView()
+            } label: {
                 Text("로그인")
                     .font(.custom("Pretendard-Bold", size: 18))
                     .foregroundColor(.white)
@@ -42,10 +44,9 @@ struct LoginView: View {
                     .padding(.vertical, 14)
                     .background(Color("Purple1"))
                     .cornerRadius(12)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 31)
-            .padding(.bottom, 32)
+            }             .padding(.horizontal, 31)
+                .padding(.bottom, 32)
+            
         } 
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .topLeading) {

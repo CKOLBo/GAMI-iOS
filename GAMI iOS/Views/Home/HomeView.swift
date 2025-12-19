@@ -99,6 +99,8 @@ struct HomeView: View{
 
         }
         .ignoresSafeArea()
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
     func WelcomeBar() -> some View{
         ZStack(alignment: .leading){

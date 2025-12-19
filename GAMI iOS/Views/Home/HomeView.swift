@@ -7,9 +7,22 @@
 
 import SwiftUI
 
+struct BoardPost: Identifiable {
+    let id = UUID()
+    let title: String
+    let content: String
+    let likeCount: Int
+    let commentCount: Int
+}
+
 struct HomeView: View{
-    
-    
+
+    @State private var posts: [BoardPost] = [
+        .init(title: "제목제목김준표", content: "내용내용내용김준표내용", likeCount: 3, commentCount: 3),
+        .init(title: "제목제목김준표", content: "내용내용내용김준표내용", likeCount: 1, commentCount: 0),
+        .init(title: "제목제목김준표", content: "내용내용내용김준표내용", likeCount: 12, commentCount: 4)
+    ]
+
     var body: some View{
         ScrollView{
             VStack(alignment: .leading, spacing: 0){
@@ -18,27 +31,20 @@ struct HomeView: View{
                         )
                     .padding(.top,60)
                    
-                ZStack(alignment: .leading){
+                VStack(alignment: .leading, spacing: 12) {
                     Text("양은준")
                         .font(.custom("Pretendard-Bold", size: 16))
                         .foregroundColor(Color("Gray3"))
-                        .padding(.leading, 12)
-                        .padding(.trailing, 286)
-                        .padding(.top, 16)
-                        .padding(.bottom, 45)
-                        
-                        .background(Color("White1"))
-                        .cornerRadius(12)
-                    
-                    HStack(spacing:0){
+
+                    HStack(spacing: 8) {
                         Text("남자")
                             .font(.custom("Pretendard-Bold", size: 10))
                             .foregroundColor(Color("Gray3"))
+
                         Rectangle()
                             .frame(width: 1, height: 14)
                             .foregroundColor(Color("Gray2"))
-                            .cornerRadius(12)
-                            .padding(.horizontal, 8)
+
                         Text("9기")
                             .font(.custom("Pretendard-Bold", size: 10))
                             .foregroundColor(.white)
@@ -46,8 +52,7 @@ struct HomeView: View{
                             .padding(.vertical, 2)
                             .background(Color("Blue1"))
                             .cornerRadius(4)
-                            .padding(.trailing, 4)
-                        
+
                         Text("FE")
                             .font(.custom("Pretendard-Bold", size: 10))
                             .foregroundColor(.white)
@@ -56,13 +61,14 @@ struct HomeView: View{
                             .background(Color("Purple1"))
                             .cornerRadius(4)
                     }
-                    .padding(.leading, 16)
-                    .padding(.top, 54)
-                    .padding(.bottom, 10)
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color("White1"))
+                .cornerRadius(12)
                 .padding(.top, 3)
                 
-                Hello()
+                WelcomeBar()
   
                 Text("멘토찾기")
                     .font(.custom("Pretendard-Bold", size: 20))
@@ -70,7 +76,7 @@ struct HomeView: View{
                     .padding(.top, 28)
                 
                 
-                Hi()
+                MentorBar()
                     .padding(.top, 12)
                 
                 Text("익명게시판")
@@ -78,17 +84,23 @@ struct HomeView: View{
                     .foregroundColor(Color("Gray1"))
                     .padding(.top, 28)
                 
-                Hoi()
-                    .padding(.top, 12)
-                  
+                LazyVStack(spacing: 12) {
+                    ForEach(posts) { post in
+                        BoardBar(post: post)
+                    }
+                }
+                .padding(.top, 12)
+                
             }
+         
             
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.horizontal, 32)
-            
+
         }
+        .ignoresSafeArea()
     }
-    func Hello() -> some View{
+    func WelcomeBar() -> some View{
         ZStack(alignment: .leading){
             RoundedRectangle(cornerRadius: 12)
                 .fill(
@@ -116,7 +128,7 @@ struct HomeView: View{
             .padding(.top, 24)
     }
     
-    func Hi() -> some View {
+    func MentorBar() -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
@@ -154,28 +166,58 @@ struct HomeView: View{
         .padding(.horizontal, 16)
     }
     
-    func Hoi() -> some View{
+    func BoardBar(post: BoardPost) -> some View{
         ZStack(){
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
                 .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 6)
-                
-            
-            VStack(){
-                Text("제목제목김준표")
+
+            VStack(alignment: .leading, spacing: 0){
+                Text(post.title)
                     .font(.custom("Pretendard-Bold", size: 16))
                     .foregroundColor(Color("Gray1"))
                     .padding(.top, 20)
                     .padding(.leading, 16)
-                Text("익명")
-                    .font(.custom("Pretendard-Bold", size: 16))
-                    .foregroundColor(Color("Gray1"))
-            }
 
+                HStack(spacing: 0){
+                    Text("익명: ")
+                        .font(.custom("Pretendard-Bold", size: 12))
+                        .foregroundColor(Color("Gray1"))
+
+                    Text(post.content)
+                        .font(.custom("Pretendard-SemiBold", size: 10))
+                        .foregroundColor(Color("Gray3"))
+                        .lineLimit(1)
+                }
+                .padding(.top, 10)
+                .padding(.leading, 16)
+
+                HStack(spacing : 0){
+                    Image("Hart")
+                        .padding(.leading, 16)
+                        .padding(.top, 15)
+                        .padding(.bottom, 15)
+
+                    Text("\(post.likeCount)")
+                        .font(.custom("Pretendard-Regular", size: 12))
+                        .foregroundColor(Color("Gray1"))
+                        .padding(.horizontal, 14)
+
+                    Image("Text")
+
+                    Text("\(post.commentCount)")
+                        .font(.custom("Pretendard-Regular", size: 12))
+                        .foregroundColor(Color("Gray1"))
+                        .padding(.leading, 14)
+                }
+            }
             .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
         }
     }
+    
 }
+
+
 
 #Preview{
     HomeView()

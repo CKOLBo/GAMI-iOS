@@ -46,7 +46,7 @@ struct LoginView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 31)
             .padding(.bottom, 32)
-        }
+        } 
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .topLeading) {
             backButton()

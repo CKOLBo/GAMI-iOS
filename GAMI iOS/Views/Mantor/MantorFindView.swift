@@ -9,6 +9,13 @@ import SwiftUI
 
 struct MantorFindView: View {
     @State private var searchText: String = ""
+    
+        private let mentors: [Mentor] = [
+            .init(name: "양은준", grade: "9기", role: "FE"),
+            .init(name: "문깜댕이", grade: "9기", role: "FE"),
+            .init(name: "김준표", grade: "9기", role: "iOS"),
+            .init(name: "문문문", grade: "9기", role: "FE")
+        ]
     var body: some View {
         ScrollView{
             VStack(alignment: .leading ,spacing: 0){
@@ -24,6 +31,21 @@ struct MantorFindView: View {
             FindBar()
                 .padding(.top,24)
                 .padding(.horizontal, 31)
+            
+            let columns: [GridItem] = [
+                GridItem(.flexible(), spacing: 16),
+                GridItem(.flexible(), spacing: 16)
+            ]
+            
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(mentors) { mentor in
+                    MentorCardView(mentor: mentor) {
+                        print("\(mentor.name) 멘토 신청")
+                    }
+                }
+            }
+            .padding(.top, 18)
+            .padding(.horizontal, 31)
         }
         
         .frame(maxWidth: .infinity,alignment: .topLeading)

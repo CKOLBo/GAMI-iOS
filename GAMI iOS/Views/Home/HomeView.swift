@@ -165,7 +165,7 @@ struct HomeView: View{
             }
             .padding(.horizontal, 24)
         }
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
     }
     
     func BoardBar(post: BoardPost) -> some View{

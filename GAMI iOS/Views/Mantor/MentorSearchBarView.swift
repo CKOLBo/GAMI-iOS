@@ -27,7 +27,6 @@ struct MentorSearchBarView: View {
                 
                 )
                     .font(.custom("Pretendard-Bold", size: 12))
-                    .padding(.leading, 8)
                     .frame(width: 250)
                     .foregroundColor(Color("Gray3"))
                     .contentShape(Rectangle())

@@ -10,12 +10,22 @@ import SwiftUI
 struct MantorFindView: View {
     @State private var searchText: String = ""
     
-        private let mentors: [Mentor] = [
-            .init(name: "양은준", grade: "9기", role: "FE"),
-            .init(name: "문깜댕이", grade: "9기", role: "FE"),
-            .init(name: "김준표", grade: "9기", role: "iOS"),
-            .init(name: "문문문", grade: "9기", role: "FE")
-        ]
+    private let mentors: [Mentor] = [
+        .init(name: "양은준", grade: "9기", role: "FE"),
+        .init(name: "문깜댕이", grade: "9기", role: "FE"),
+        .init(name: "김준표", grade: "9기", role: "iOS"),
+        .init(name: "문문문", grade: "9기", role: "FE")
+    ]
+    
+    private var filteredMentors: [Mentor] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.isEmpty { return mentors }
+        return mentors.filter { mentor in
+            mentor.name.localizedCaseInsensitiveContains(q) ||
+            mentor.grade.localizedCaseInsensitiveContains(q) ||
+            mentor.role.localizedCaseInsensitiveContains(q)
+        }
+    }
     var body: some View {
         ScrollView{
             VStack(alignment: .leading ,spacing: 0){
@@ -37,15 +47,21 @@ struct MantorFindView: View {
                 GridItem(.flexible(), spacing: 16)
             ]
             
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(mentors) { mentor in
-                    MentorCardView(mentor: mentor) {
-                        print("\(mentor.name) 멘토 신청")
+            if filteredMentors.isEmpty {
+                MentorEmptyView()
+                    .padding(.horizontal, 31)
+                    .padding(.top, 40)
+            } else {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(filteredMentors) { mentor in
+                        MentorCardView(mentor: mentor) {
+                            print("\(mentor.name) 멘토 신청")
+                        }
                     }
                 }
+                .padding(.top, 18)
+                .padding(.horizontal, 31)
             }
-            .padding(.top, 18)
-            .padding(.horizontal, 31)
         }
         
         .frame(maxWidth: .infinity,alignment: .topLeading)

@@ -111,5 +111,5 @@ struct MantorFindView: View {
 }
 
 #Preview {
-    MantorFindView()
+    MantorFindView() 
 }

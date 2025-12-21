@@ -65,6 +65,7 @@ struct ChatRoomView: View {
             }
             .navigationBarBackButtonHidden(true)
             .background(Color.white)
+            .ignoresSafeArea()
 
             if showLeaveDialog {
                 LeaveChatDialog(

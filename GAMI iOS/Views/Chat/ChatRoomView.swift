@@ -39,7 +39,7 @@ struct ChatRoomView: View {
                 .padding(.top, 26)
 
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: 12) {
                     dateChip("2025년 12월 03일")
                     ForEach(messages) { msg in
                         messageRow(msg)
@@ -182,9 +182,10 @@ struct ChatRoomView: View {
 
     private var inputBar: some View {
         HStack(spacing: 0) {
-            TextField("메시지", text: $messageText)
-                .font(.system(size: 16, weight: .semibold))
-                .padding(.horizontal, 16)
+            TextField("", text: $messageText, prompt: Text("메시지").foregroundStyle(Color("Gray3")))
+                .font(.custom("Pretendard-Bold", size: 12))
+                .padding(.leading, 20)
+                .foregroundStyle(Color("Gray3"))
                 .frame(height: 46)
 
             Button {
@@ -194,14 +195,18 @@ struct ChatRoomView: View {
                 messageText = ""
             } label: {
                 Text("보내기")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(Color("Blue1"))
-                    .padding(.trailing, 10)
+                    .padding(.trailing, 16)
             }
         }
         .background(
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .fill(Color("White1"))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color("Gray4"), lineWidth: 1)
         )
         .frame(height: 52)
     }

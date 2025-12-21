@@ -17,9 +17,16 @@ struct ChatMessage: Identifiable {
 
 struct ChatRoomView: View {
     let title: String
+    let onLeave: (() -> Void)?
+    
+    init(title: String, onLeave: (() -> Void)? = nil) {
+        self.title = title
+        self.onLeave = onLeave
+    }
 
     @Environment(\.dismiss) private var dismiss
     @State private var messageText: String = ""
+    @State private var showLeaveDialog: Bool = false
 
     @State private var messages: [ChatMessage] = [
         .init(text: "안녕 나는 깜둥이야", isMe: false),
@@ -29,34 +36,51 @@ struct ChatRoomView: View {
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            
-            Rectangle()
-                .fill(Color("Gray2"))
-                .frame(height: 1)
-                .padding(.horizontal, 16)
-                .padding(.top, 26)
+        ZStack {
+            VStack(spacing: 0) {
+                header
+                
+                Rectangle()
+                    .fill(Color("Gray2"))
+                    .frame(height: 1)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 26)
 
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    dateChip("2025년 12월 03일")
-                    ForEach(messages) { msg in
-                        messageRow(msg)
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        dateChip("2025년 12월 03일")
+                        ForEach(messages) { msg in
+                            messageRow(msg)
+                        }
+
+                        Spacer(minLength: 12)
                     }
-
-                    Spacer(minLength: 12)
+                    .padding(.top, 24)
+                    .padding(.horizontal, 20)
                 }
-                .padding(.top, 24)
-                .padding(.horizontal, 20)
-            }
 
-            inputBar
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
+                inputBar
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+            }
+            .navigationBarBackButtonHidden(true)
+            .background(Color.white)
+
+            if showLeaveDialog {
+                LeaveChatDialog(
+                    onCancel: { showLeaveDialog = false },
+                    onLeave: {
+                        showLeaveDialog = false
+                        if let onLeave {
+                            onLeave()
+                        } else {
+                            dismiss()
+                        }
+                    }
+                )
+                .transition(.opacity)
+            }
         }
-        .navigationBarBackButtonHidden(true)
-        .background(Color.white)
     }
 
     private var header: some View {
@@ -77,7 +101,7 @@ struct ChatRoomView: View {
             .padding(.top, 16)
 
             Button {
-           
+                showLeaveDialog = true
             } label: {
                 Text("나가기")
                     .font(.custom("Pretendard-Bold", size: 14))
@@ -159,7 +183,6 @@ struct ChatRoomView: View {
                 Spacer(minLength: 0)
             }
                 
-
             Text(msg.text)
                 .font(.custom("Pretendard-SemiBold", size: 14))
                 .foregroundColor(msg.isMe ? Color.white : Color("Gray1"))
@@ -209,6 +232,79 @@ struct ChatRoomView: View {
                 .stroke(Color("Gray4"), lineWidth: 1)
         )
         .frame(height: 52)
+    }
+}
+
+private struct LeaveChatDialog: View {
+    let onCancel: () -> Void
+    let onLeave: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .onTapGesture { }
+
+            VStack(alignment: .leading, spacing: 0) {
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("채팅방 나가기")
+                        .font(.custom("Pretendard-Bold", size: 20))
+                        .foregroundStyle(Color("Gray1"))
+                        .padding(.bottom, 60)
+
+                    Text("정말 나가시겠어요?")
+                        .font(.custom("Pretendard-Bold", size: 12))
+                        .foregroundStyle(Color("Gray1"))
+                    
+                    Text("나가기를 누른 시 더이상 상대와 채팅을 할 수 없어요.")
+                        .font(.custom("Pretendard-SemiBold", size: 12))
+                        .foregroundStyle(Color("Gray3"))
+                        .padding(.bottom, 56)
+                }
+                .padding(.top, 16)
+                .padding(.horizontal, 22)
+
+                HStack(spacing: 12) {
+                    Button(action: onCancel) {
+                        Text("취소")
+                            .font(.custom("Pretendard-Bold", size: 14))
+                            .foregroundStyle(Color("Gray1"))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.white)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color("Gray4"), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: onLeave) {
+                        Text("나가기")
+                            .font(.custom("Pretendard-Bold", size: 14))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color("Red1"))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 22)
+                .padding(.horizontal, 22)
+                .padding(.bottom, 18)
+            }
+            .frame(maxWidth: 330)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white)
+            )
+            .padding(.horizontal, 28)
+        }
     }
 }
 

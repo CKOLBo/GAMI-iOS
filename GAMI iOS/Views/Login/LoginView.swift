@@ -70,7 +70,6 @@ private extension LoginView {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color.white.opacity(0.95))
 
         }
         .buttonStyle(.plain)

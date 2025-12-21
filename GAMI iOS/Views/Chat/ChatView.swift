@@ -143,6 +143,7 @@ struct ChatView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                 
                    
                 }
             }

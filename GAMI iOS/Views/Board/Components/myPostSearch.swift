@@ -1,13 +1,14 @@
 //
-//  MentorSearchBarView.swift
+//  myPostSearch.swift
 //  GAMI iOS
 //
-//  Created by 김준표 on 12/19/25.
+//  Created by 김준표 on 12/22/25.
 //
+
 
 import SwiftUI
 
-struct MentorSearchBarView: View {
+struct myPostSearch: View {
     @Binding var searchText: String
     
     var body: some View {
@@ -18,9 +19,9 @@ struct MentorSearchBarView: View {
                 Image("search")
                     .padding(.leading, 21)
                 
-                TextField("멘토 검색",
+                TextField("내가 쓴 글 검색",
                           text: $searchText,
-                          prompt: Text("멘토 검색")
+                          prompt: Text("내가 쓴 글 검색")
                     .font(.custom("Pretendard-Bold", size: 12))
                     .foregroundColor(Color("Gray3"))
                 
@@ -39,5 +40,5 @@ struct MentorSearchBarView: View {
 
 #Preview {
     @Previewable @State var text: String = ""
-    MentorSearchBarView(searchText: $text)
+    myPostSearch(searchText: $text)
 }

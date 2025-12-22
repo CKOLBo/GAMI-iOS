@@ -158,16 +158,6 @@ struct ChatRoomView: View {
         
     }
 
-    private func tag(_ text: String, fill: Color) -> some View {
-        Text(text)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6).fill(fill)
-            )
-    }
 
     private func dateChip(_ text: String) -> some View {
         Text(text)

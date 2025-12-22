@@ -8,11 +8,36 @@
 import SwiftUI
 
 struct BoardSearchBar: View {
+    @Binding var searchText: String
+    
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        ZStack(alignment: .leading){
+            Image("searchBar")
+            
+            HStack(){
+                Image("search")
+                    .padding(.leading, 21)
+                
+                TextField("익명게시판 검색",
+                          text: $searchText,
+                          prompt: Text("익명게시판 검색")
+                    .font(.custom("Pretendard-Bold", size: 12))
+                    .foregroundColor(Color("Gray3"))
+                
+                
+                )
+                    .font(.custom("Pretendard-Bold", size: 12))
+                    .frame(width: 250)
+                    .foregroundColor(Color("Gray3"))
+                    .contentShape(Rectangle())
+            }
+
+           
+        }
     }
 }
 
 #Preview {
-    BoardSearchBar()
+    @Previewable @State var text: String = ""
+    BoardSearchBar(searchText: $text)
 }

@@ -113,9 +113,7 @@ struct HomeView: View{
                         
                     )
                 )
-                .shadow(
-                    color: Color.black.opacity(0.25),
-                    radius: 12, x: 0, y: 6)
+                .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 6)
                 .frame(width: 340, height: 80)
             
             Text("GAMI에 오신걸 환영합니다! 반가워요, 양은준님")

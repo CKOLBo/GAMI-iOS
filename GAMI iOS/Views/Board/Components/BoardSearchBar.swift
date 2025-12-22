@@ -12,7 +12,7 @@ struct BoardSearchBar: View {
     
     var body: some View {
         ZStack(alignment: .leading){
-            Image("searchBar")
+            Image("Short")
             
             HStack(){
                 Image("search")
@@ -27,7 +27,7 @@ struct BoardSearchBar: View {
                 
                 )
                     .font(.custom("Pretendard-Bold", size: 12))
-                    .frame(width: 250)
+                    .frame(width: 170)
                     .foregroundColor(Color("Gray3"))
                     .contentShape(Rectangle())
             }

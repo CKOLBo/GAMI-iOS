@@ -1,5 +1,5 @@
 //
-//  BoardPostCard.swift
+//  MyPostCard.swift
 //  GAMI iOS
 //
 //  Created by 김준표 on 12/22/25.
@@ -7,30 +7,29 @@
 
 import SwiftUI
 
-struct BoardPostCard: View {
+struct MyPostCard: View {
+    
     let title: String
     let preview: String
-    @State private var likeCount: Int
+    let likeCount: Int
     let commentCount: Int
     let thumbnail: Image?
-    let onTapReport: () -> Void
 
     init(
         title: String,
         preview: String,
         likeCount: Int = 0,
         commentCount: Int = 0,
-        thumbnail: Image? = nil,
-        onTapReport: @escaping () -> Void = {}
+        thumbnail: Image? = nil
     ) {
         self.title = title
         self.preview = preview
         self.likeCount = likeCount
         self.commentCount = commentCount
         self.thumbnail = thumbnail
-        self.onTapReport = onTapReport
     }
 
+    
     var body: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
@@ -54,22 +53,18 @@ struct BoardPostCard: View {
                         .font(.custom("Pretendard-SemiBold", size: 10))
                         .foregroundColor(Color("Gray3"))
                         .lineLimit(1)
+                        
                 }
                 .padding(.bottom, 20)
 
                 HStack(spacing: 0) {
-                    Button {
-                        likeCount += 1
-                    } label: {
-                        HStack(spacing: 0) {
-                            Image("Hart")
-                            Text("\(likeCount)")
-                                .font(.custom("Pretendard-Regular", size: 12))
-                                .foregroundColor(Color("Gray1"))
-                                .padding(.horizontal, 14)
-                        }
+                    HStack(spacing: 0) {
+                        Image("Hart")
+                        Text("\(likeCount)")
+                            .font(.custom("Pretendard-Regular", size: 12))
+                            .foregroundColor(Color("Gray1"))
+                            .padding(.horizontal, 14)
                     }
-                    .buttonStyle(.plain)
 
                     HStack(spacing: 0) {
                         Image("Text")
@@ -79,17 +74,7 @@ struct BoardPostCard: View {
                             .padding(.horizontal, 14)
                     }
 
-                    Button {
-                        onTapReport()
-                    } label: {
-                        Image("report")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 14, height: 14)
-                            .padding(10)
-                    }
-                    .contentShape(Rectangle())
-                    .buttonStyle(.plain)
+                    Image("report")
                 }
                 .padding(.top, 2)
             }
@@ -120,23 +105,22 @@ struct BoardPostCard: View {
 
 #Preview {
     VStack(spacing: 16) {
-        BoardPostCard(
+        MyPostCard(
             title: "제목제목김준표s",
             preview: "내용내용내용김준표내용",
             likeCount: 3,
             commentCount: 0,
-            thumbnail: Image("sample"),
-            onTapReport: {}
+            thumbnail: Image("sample")
         )
 
         BoardPostCard(
             title: "GSM에서 살아남는 방법",
             preview: "제가 GSM에서 살아남는 방법을 알려 드리겠습니다!",
             likeCount: 3,
-            commentCount: 0,
-            onTapReport: {}
+            commentCount: 0
         )
     }
     .padding(24)
     .background(Color.white)
 }
+

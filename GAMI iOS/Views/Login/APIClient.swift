@@ -31,6 +31,28 @@ extension Endpoint {
     var body: Data? { nil }
 }
 
+struct AnyEndpoint: Endpoint {
+    let method: HTTPMethod
+    let path: String
+    let queryItems: [URLQueryItem]
+    let headers: [String : String]
+    let body: Data?
+
+    init(
+        method: HTTPMethod,
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        headers: [String: String] = [:],
+        body: Data? = nil
+    ) {
+        self.method = method
+        self.path = path
+        self.queryItems = queryItems
+        self.headers = headers
+        self.body = body
+    }
+}
+
 
 
 enum APIError: LocalizedError {
@@ -62,8 +84,15 @@ final class APIClient {
     static let shared = APIClient()
 
 
-
-    private let baseURL = URL(string: "https://example.com")!
+    private let baseURL: URL = {
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
+           let url = URL(string: raw),
+           !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return url
+        }
+        
+        return URL(string: "https://example.com")!
+    }()
 
     private let session: URLSession
 
@@ -117,11 +146,11 @@ final class APIClient {
         request.httpMethod = endpoint.method.rawValue
         request.httpBody = endpoint.body
 
-        // default headers
+    
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        // custom headers
+ 
         endpoint.headers.forEach { key, value in
             request.setValue(value, forHTTPHeaderField: key)
         }
@@ -130,7 +159,7 @@ final class APIClient {
     }
 }
 
-// MARK: - DTO
+
 
 struct LoginRequestDTO: Encodable {
     let email: String
@@ -139,75 +168,92 @@ struct LoginRequestDTO: Encodable {
 
 struct LoginResponseDTO: Decodable {
     let accessToken: String
-    let refreshToken: String?
+    let refreshToken: String
+    let accessTokenExpiresIn: String
+    let refreshTokenExpiresIn: String
 }
 
-struct SendEmailCodeRequestDTO: Encodable {
+struct SignUpRequestDTO: Encodable {
     let email: String
+    let password: String
+    let name: String
+    let generation: Int
+    let gender: String
+    let major: String
 }
 
-struct VerifyEmailCodeRequestDTO: Encodable {
+struct SendVerificationCodeRequestDTO: Encodable {
     let email: String
-    let code: String
+    let verificationType: String
 }
 
-struct ResetPasswordRequestDTO: Encodable {
+struct ReissueResponseDTO: Decodable {
+    let accessToken: String
+    let refreshToken: String
+    let accessTokenExpiresIn: String
+    let refreshTokenExpiresIn: String
+}
+
+struct ChangePasswordRequestDTO: Encodable {
     let email: String
-    let code: String
     let newPassword: String
 }
 
 
 
 enum AuthEndpoint: Endpoint {
-    case login(LoginRequestDTO)
-    case sendEmailCode(SendEmailCodeRequestDTO)
-    case verifyEmailCode(VerifyEmailCodeRequestDTO)
-    case resetPassword(ResetPasswordRequestDTO)
+    case signup(SignUpRequestDTO)
+    case signin(LoginRequestDTO)
+    case sendVerificationCode(SendVerificationCodeRequestDTO)
+    case verifyEmailCode(email: String, code: String)
+    case reissue(refreshToken: String)
+    case changePassword(ChangePasswordRequestDTO)
+    case signout
 
     var method: HTTPMethod {
         switch self {
-        case .login, .sendEmailCode, .verifyEmailCode, .resetPassword:
+        case .signup, .signin, .sendVerificationCode, .verifyEmailCode:
             return .post
+        case .reissue, .changePassword:
+            return .patch
+        case .signout:
+            return .delete
         }
     }
 
-
     var path: String {
         switch self {
-        case .login:
-            return "/auth/login"
-        case .sendEmailCode:
-            return "/auth/email/send"
+        case .signup:
+            return "/api/auth/signup"
+        case .signin:
+            return "/api/auth/signin"
+        case .sendVerificationCode:
+            return "/api/auth/email/send-code"
         case .verifyEmailCode:
-            return "/auth/email/verify"
-        case .resetPassword:
-            return "/auth/password/reset"
+            return "/api/auth/email/verification-code"
+        case .reissue:
+            return "/api/auth/reissue"
+        case .changePassword:
+            return "/api/auth/password"
+        case .signout:
+            return "/api/auth/signout"
+        }
+    }
+
+    var headers: [String : String] {
+        switch self {
+        case let .reissue(refreshToken):
+            return ["RefreshToken": refreshToken]
+        default:
+            return [:]
         }
     }
 
     var body: Data? {
-        do {
-            let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
-
-            switch self {
-            case let .login(dto):
-                return try encoder.encode(dto)
-            case let .sendEmailCode(dto):
-                return try encoder.encode(dto)
-            case let .verifyEmailCode(dto):
-                return try encoder.encode(dto)
-            case let .resetPassword(dto):
-                return try encoder.encode(dto)
-            }
-        } catch {
-           
-            return nil
-        }
+        
+        return nil
     }
 }
-
 
 
 final class AuthService {
@@ -217,36 +263,133 @@ final class AuthService {
         self.client = client
     }
 
-    func login(email: String, password: String) async throws -> LoginResponseDTO {
-        let dto = LoginRequestDTO(email: email, password: password)
+    private func encodeBody<T: Encodable>(_ dto: T) throws -> Data {
+        let encoder = JSONEncoder()
+       
+        encoder.keyEncodingStrategy = .useDefaultKeys
+        do {
+            return try encoder.encode(dto)
+        } catch {
+            throw APIError.encoding(error)
+        }
+    }
 
-   
-        let endpoint = AuthEndpoint.login(dto)
-        guard endpoint.body != nil else { throw APIError.encoding(NSError(domain: "encoding", code: -1)) }
+    
+
+    func signup(
+        email: String,
+        password: String,
+        name: String,
+        generation: Int,
+        gender: String,
+        major: String
+    ) async throws {
+        let dto = SignUpRequestDTO(
+            email: email,
+            password: password,
+            name: name,
+            generation: generation,
+            gender: gender,
+            major: major
+        )
+
+        let body = try encodeBody(dto)
+
+        let endpoint = AnyEndpoint(
+            method: AuthEndpoint.signup(dto).method,
+            path: AuthEndpoint.signup(dto).path,
+            headers: AuthEndpoint.signup(dto).headers,
+            body: body
+        )
+
+        try await client.requestNoBody(endpoint)
+    }
+
+    func signin(email: String, password: String) async throws -> LoginResponseDTO {
+        let dto = LoginRequestDTO(email: email, password: password)
+        let body = try encodeBody(dto)
+
+        let endpoint = AnyEndpoint(
+            method: AuthEndpoint.signin(dto).method,
+            path: AuthEndpoint.signin(dto).path,
+            headers: AuthEndpoint.signin(dto).headers,
+            body: body
+        )
 
         return try await client.request(endpoint, as: LoginResponseDTO.self)
     }
 
-    func sendEmailCode(email: String) async throws {
-        let dto = SendEmailCodeRequestDTO(email: email)
-        let endpoint = AuthEndpoint.sendEmailCode(dto)
-        guard endpoint.body != nil else { throw APIError.encoding(NSError(domain: "encoding", code: -1)) }
+
+    func sendVerificationCode(email: String, verificationType: String = "SIGN_UP") async throws {
+        let dto = SendVerificationCodeRequestDTO(email: email, verificationType: verificationType)
+        let body = try encodeBody(dto)
+
+        let endpoint = AnyEndpoint(
+            method: AuthEndpoint.sendVerificationCode(dto).method,
+            path: AuthEndpoint.sendVerificationCode(dto).path,
+            headers: AuthEndpoint.sendVerificationCode(dto).headers,
+            body: body
+        )
 
         try await client.requestNoBody(endpoint)
     }
 
     func verifyEmailCode(email: String, code: String) async throws {
-        let dto = VerifyEmailCodeRequestDTO(email: email, code: code)
-        let endpoint = AuthEndpoint.verifyEmailCode(dto)
-        guard endpoint.body != nil else { throw APIError.encoding(NSError(domain: "encoding", code: -1)) }
+        
+        struct VerifyDTO: Encodable {
+            let email: String
+            let code: String
+        }
+
+        let dto = VerifyDTO(email: email, code: code)
+        let body = try encodeBody(dto)
+
+        let endpoint = AnyEndpoint(
+            method: AuthEndpoint.verifyEmailCode(email: email, code: code).method,
+            path: AuthEndpoint.verifyEmailCode(email: email, code: code).path,
+            headers: AuthEndpoint.verifyEmailCode(email: email, code: code).headers,
+            body: body
+        )
 
         try await client.requestNoBody(endpoint)
     }
 
-    func resetPassword(email: String, code: String, newPassword: String) async throws {
-        let dto = ResetPasswordRequestDTO(email: email, code: code, newPassword: newPassword)
-        let endpoint = AuthEndpoint.resetPassword(dto)
-        guard endpoint.body != nil else { throw APIError.encoding(NSError(domain: "encoding", code: -1)) }
+  
+
+    func reissue(refreshToken: String) async throws -> ReissueResponseDTO {
+        let endpoint = AnyEndpoint(
+            method: AuthEndpoint.reissue(refreshToken: refreshToken).method,
+            path: AuthEndpoint.reissue(refreshToken: refreshToken).path,
+            headers: AuthEndpoint.reissue(refreshToken: refreshToken).headers,
+            body: nil
+        )
+
+        return try await client.request(endpoint, as: ReissueResponseDTO.self)
+    }
+
+
+
+    func changePassword(email: String, newPassword: String) async throws {
+        let dto = ChangePasswordRequestDTO(email: email, newPassword: newPassword)
+        let body = try encodeBody(dto)
+
+        let endpoint = AnyEndpoint(
+            method: AuthEndpoint.changePassword(dto).method,
+            path: AuthEndpoint.changePassword(dto).path,
+            headers: AuthEndpoint.changePassword(dto).headers,
+            body: body
+        )
+
+        try await client.requestNoBody(endpoint)
+    }
+
+    func signout() async throws {
+        let endpoint = AnyEndpoint(
+            method: AuthEndpoint.signout.method,
+            path: AuthEndpoint.signout.path,
+            headers: AuthEndpoint.signout.headers,
+            body: nil
+        )
 
         try await client.requestNoBody(endpoint)
     }

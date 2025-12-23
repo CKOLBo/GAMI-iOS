@@ -39,9 +39,9 @@ struct MyPostsView: View {
                 
                 Button {
                     if path.count > 0 {
-                        path.removeLast(path.count) // pop to root (HomeView)
+                        path.removeLast(path.count)
                     } else {
-                        dismiss() // fallback
+                        dismiss()
                     }
                 } label: {
                     HStack(spacing: 0) {
@@ -222,9 +222,7 @@ private struct MyPostRowCard: View {
                     Button {
                         onTapDelete()
                     } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundColor(Color("Gray3"))
+                        Image("dumb")
                             .padding(.leading, 14)
                     }
                     .buttonStyle(.plain)

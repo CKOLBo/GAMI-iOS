@@ -209,7 +209,7 @@ struct ChatRoomView: View {
                 messageText = ""
             } label: {
                 Text("보내기")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.custom("Pretendard-Bold", size: 12))
                     .foregroundColor(Color("Blue1"))
                     .padding(.trailing, 16)
             }

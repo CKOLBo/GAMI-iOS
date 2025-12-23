@@ -8,7 +8,10 @@
 import SwiftUI
 
 struct LoginView: View {
+    
+
     @Environment(\.dismiss) private var dismiss
+    private let authService = AuthService()
 
     @State private var email: String = ""
     @State private var password: String = ""
@@ -94,6 +97,9 @@ struct LoginView: View {
             .padding(.bottom, 32)
             
             }
+        }
+        .onAppear {
+            print("BASE URL =", Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") ?? "nil")
         }
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .topLeading) {
@@ -200,7 +206,6 @@ private extension LoginView {
     func login() {
         guard canLogin else { return }
 
-       
         guard isEmailValid else {
             loginErrorMessage = "이메일 형식이 올바르지 않습니다."
             showLoginError = true
@@ -215,12 +220,57 @@ private extension LoginView {
 
         isLoggingIn = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            isLoggingIn = false
+        Task {
+            do {
+                let res = try await authService.signin(email: email, password: password)
 
+    
+                UserDefaults.standard.set(res.accessToken, forKey: "accessToken")
+                UserDefaults.standard.set(res.refreshToken, forKey: "refreshToken")
+                UserDefaults.standard.set(res.accessTokenExpiresIn, forKey: "accessTokenExpiresIn")
+                UserDefaults.standard.set(res.refreshTokenExpiresIn, forKey: "refreshTokenExpiresIn")
 
+                await MainActor.run {
+                    isLoggingIn = false
+                    navigateToHome = true
+                }
+            } catch {
+                let message: String
 
-            navigateToHome = true
+                if let apiError = error as? APIError {
+                    switch apiError {
+                    case .invalidResponse:
+                        message = "서버 응답이 올바르지 않아요."
+
+                    case .httpStatus(let code, _):
+                        if code == 401 {
+                            message = "이메일 또는 비밀번호가 올바르지 않아요."
+                        } else {
+                            message = "요청에 실패했어요. (HTTP \(code))"
+                        }
+
+                    case .decoding:
+                        message = "응답 파싱에 실패했어요."
+
+                    case .encoding:
+                        message = "요청 데이터 생성에 실패했어요."
+
+                    case .invalidURL:
+                        message = "서버 주소(URL)가 올바르지 않아요."
+
+                    default:
+                        message = "요청에 실패했어요."
+                    }
+                } else {
+                    message = error.localizedDescription
+                }
+
+                await MainActor.run {
+                    isLoggingIn = false
+                    loginErrorMessage = message
+                    showLoginError = true
+                }
+            }
         }
     }
 }

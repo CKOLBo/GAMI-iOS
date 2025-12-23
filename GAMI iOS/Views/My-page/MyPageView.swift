@@ -104,8 +104,8 @@ private struct ProfileCardView: View {
                         
 
                     Text("|")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color(.systemGray3))
+                        .font(.custom("Pretendard-Bold", size: 10))
+                        .foregroundStyle(Color("Gray3"))
                         .padding(.horizontal,8)
 
                     Text(grade)

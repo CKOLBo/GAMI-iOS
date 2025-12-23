@@ -14,9 +14,9 @@ struct EmailView: View {
     @State private var isLoggingIn: Bool = false
     @State private var showLoginError: Bool = false
     @State private var loginErrorMessage: String = ""
-    @State private var isCodeSent: Bool = false
     @State private var sentCode: String = ""
     @State private var codeInput: String = ""
+    @State private var showVerifyView: Bool = false
 
     @State private var remainingSeconds: Int = 300
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -40,100 +40,73 @@ struct EmailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                Spacer()
-                    .frame(height: 76)
-                Image("logo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 140, height: 112)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                   
-                    .padding(.bottom, 52)
+        NavigationStack {
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Spacer()
+                        .frame(height: 76)
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 140, height: 112)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                       
+                        .padding(.bottom, 52)
 
-                if !isCodeSent {
                     inputField(title: "이메일", text: $email)
                         .padding(.bottom, 20)
-                } else {
-                    inputField(title: "인증번호", text: $codeInput)
-
-                    HStack(spacing: 6) {
-                        if remainingSeconds == 0 {
-                            Text("시간이 만료되었어요")
-                                .font(.custom("Pretendard-Medium", size: 14))
-                                .foregroundColor(.red)
-                        } else {
-                            Text("")
-                                .font(.custom("Pretendard-Medium", size: 14))
-                                .foregroundColor(Color("Gray3"))
-
-                            Text(timeString)
-                                .font(.custom("Pretendard-Medium", size: 14))
-                                .foregroundColor(Color("Gray3"))
-                        }
-
-                        Spacer()
-
-                        Button {
-                            resendCode()
-                        } label: {
-                            Text("재발송")
-                                .font(.custom("Pretendard-Medium", size: 14))
-                                .foregroundColor(canResend ? .blue : Color("Blue1"))
-                        }
-                        .disabled(!canResend)
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.top, 12)
                 }
+                .padding(.horizontal, 31)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    sendCode()
+                } label: {
+                    ZStack {
+                        Text("인증번호 받기")
+                            .font(.custom("Pretendard-Bold", size: 18))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(canSendCode ? Color("Purple1") : Color("Gray4"))
+                            .cornerRadius(12)
+
+                        if isLoggingIn {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(!canSendCode)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 31)
+                .padding(.bottom, 32)
                 
             }
-            .padding(.horizontal, 31)
-
-            Spacer(minLength: 0)
-
-            Button {
-                if isCodeSent {
-                    verifyCode()
-                } else {
-                    sendCode()
-                }
-            } label: {
-                ZStack {
-                    Text(isCodeSent ? "인증하기" : "인증번호 받기")
-                        .font(.custom("Pretendard-Bold", size: 18))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background((isCodeSent ? codeInput.count == 6 : canSendCode) ? Color("Purple1") : Color("Gray4"))
-                        .cornerRadius(12)
-
-                    if isLoggingIn {
-                        ProgressView()
-                    }
-                }
+            .toolbar(.hidden, for: .navigationBar)
+            .overlay(alignment: .topLeading) {
+                backButton()
+                    .padding(.leading, 16)
+                    .padding(.top, 12)
             }
-            .disabled(isCodeSent ? codeInput.count != 6 : !canSendCode)
-            .buttonStyle(.plain)
-            .padding(.horizontal, 31)
-            .padding(.bottom, 32)
-            
-        }
-        .toolbar(.hidden, for: .navigationBar)
-        .overlay(alignment: .topLeading) {
-            backButton()
-                .padding(.leading, 16)
-                .padding(.top, 12)
-        }
-        .alert("로그인 실패", isPresented: $showLoginError) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text(loginErrorMessage)
-        }
-        .onReceive(timer) { _ in
-            guard isCodeSent, remainingSeconds > 0 else { return }
-            remainingSeconds -= 1
+            .alert("로그인 실패", isPresented: $showLoginError) {
+                Button("확인", role: .cancel) {}
+            } message: {
+                Text(loginErrorMessage)
+            }
+            .onReceive(timer) { _ in
+                guard showVerifyView, remainingSeconds > 0 else { return }
+                remainingSeconds -= 1
+            }
+            .navigationDestination(isPresented: $showVerifyView) {
+                EmailVerifyView(
+                    codeInput: $codeInput,
+                    remainingSeconds: remainingSeconds,
+                    timeString: timeString,
+                    canResend: canResend,
+                    onTapResend: resendCode
+                )
+            }
         }
     }
 }
@@ -160,7 +133,7 @@ private extension EmailView {
         TextField(title, text: text)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled(true)
-            .keyboardType(title == "이메일" ? .emailAddress : .default)
+            .keyboardType(.emailAddress)
             .font(.custom("Pretendard-Medium", size: 16))
             .foregroundColor(Color("Gray1"))
             .padding(.vertical, 20)
@@ -177,7 +150,7 @@ private extension EmailView {
         guard canSendCode else { return }
 
         guard isEmailValid else {
-            loginErrorMessage = "이메일 형식이 올바르지 않습니다."
+            loginErrorMessage = "이메일에 @gsm 이 포함되어야 합니다."
             showLoginError = true
             return
         }
@@ -189,9 +162,9 @@ private extension EmailView {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             isLoggingIn = false
-            isCodeSent = true
             codeInput = ""
             remainingSeconds = 300
+            showVerifyView = true
         }
     }
 
@@ -201,17 +174,6 @@ private extension EmailView {
         sentCode = code
         codeInput = ""
         remainingSeconds = 300
-    }
-
-    func verifyCode() {
-        guard codeInput.count == 6 else { return }
-
-        if codeInput == sentCode {
-           
-            dismiss()
-        } else {
-            return
-        }
     }
 }
 

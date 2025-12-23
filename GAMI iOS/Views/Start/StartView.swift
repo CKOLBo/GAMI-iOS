@@ -70,8 +70,9 @@ struct StartView: View {
             }
             .padding(.bottom, 10)
 
-            Button(action: {
-            }, label: {
+            NavigationLink {
+                SiginupView()
+            } label: {
                 Text("회원가입")
                     .font(Font.custom("Pretendard-Bold", size: 18))
                     .foregroundColor(.white)
@@ -80,7 +81,7 @@ struct StartView: View {
                     .background(Color("Blue1"))
                     .cornerRadius(12)
                     .padding(.bottom, 32)
-            })
+            }
         }
         .navigationBarBackButtonHidden(true)
     }

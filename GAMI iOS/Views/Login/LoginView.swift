@@ -20,7 +20,7 @@ struct LoginView: View {
     @State private var isLoggingIn: Bool = false
     @State private var showLoginError: Bool = false
     @State private var loginErrorMessage: String = ""
-    @State private var navigateToHome: Bool = false
+    @State private var navigateToMainTab: Bool = false
 
     @State private var navigateToEmailView: Bool = false
 
@@ -60,8 +60,8 @@ struct LoginView: View {
             Spacer(minLength: 0)
 
            
-            NavigationLink(isActive: $navigateToHome) {
-                HomeView()
+            NavigationLink(isActive: $navigateToMainTab) {
+                TabbarView()
             } label: {
                 EmptyView()
             }
@@ -232,7 +232,7 @@ private extension LoginView {
 
                 await MainActor.run {
                     isLoggingIn = false
-                    navigateToHome = true
+                    navigateToMainTab = true
                 }
             } catch {
                 let message: String

@@ -28,8 +28,30 @@ struct SiginupView: View {
             }
         }
     }
+    
+    private var apiMajor: String {
+        switch selectedMajor {
+        case "FE": return "FRONTEND"
+        case "BE": return "BACKEND"
+        case "iOS": return "IOS"
+        case "Android": return "ANDROID"
+        case "Design": return "DESIGN"
+        case "DevOps": return "DEVOPS"
+        case "AI": return "AI"
+        case "IT Network": return "IT_NETWORK"
+        case "Flutter": return "FLUTTER"
+        case "Cyber Security": return "CYBER_SECURITY"
+        case "Game Development": return "GAME_DEVELOP"
+        case "Cloud Computing": return "CLOUD_COMPUTING"
+        case "Mobile Robotics": return "MOBILE_ROBOTICS"
+        default: return selectedMajor
+        }
+    }
+
 
     @State private var selectedGender: Gender? = nil
+
+    @State private var selectedMajor: String = ""
 
     @State private var isLoggingIn: Bool = false
     @State private var navigateToEmailView: Bool = false
@@ -40,21 +62,23 @@ struct SiginupView: View {
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
 
-    private var isEmailValid: Bool {
-        email.contains("@gsm")
-    }
-
     private var canSendCode: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        isEmailValid &&
         !selectedGrade.isEmpty &&
         selectedGender != nil &&
+        !selectedMajor.isEmpty &&
         !isLoggingIn
     }
     
     
-
+    private let majors: [String] = [
+        "FE", "BE", "iOS", "Mobile Robotics",
+        "Android", "Design", "DevOps", "AI",
+        "IT Network", "Flutter", "Cyber Security",
+        "Game Development", "Cloud Computing"
+    ]
+    
     var body: some View {
 
         
@@ -91,43 +115,16 @@ struct SiginupView: View {
                     genderToggleRow()
                         .padding(.top, 20)
                         .zIndex(0)
+
+                    MajorChipGrid(items: majors, selected: $selectedMajor)
+                        .padding(.top, 20)
                 }
                 .padding(.horizontal, 31)
 
                 Spacer(minLength: 0)
 
                 Button {
-                    guard canSendCode else { return }
-                    isLoggingIn = true
-
-                    Task {
-                        do {
-                            print("SEND CODE email =", email, "| trimmed =", email.trimmingCharacters(in: .whitespacesAndNewlines))
-                        
-                            try await authService.sendVerificationCode(
-                                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                                verificationType: "SIGN_UP"
-                            )
-                            await MainActor.run {
-                                isLoggingIn = false
-                                remainingSeconds = 180
-                                navigateToEmailView = true
-                            }
-                        } catch {
-                            let msg: String
-                            if let apiError = error as? APIError {
-                                msg = apiError.localizedDescription
-                            } else {
-                                msg = error.localizedDescription
-                            }
-
-                            await MainActor.run {
-                                isLoggingIn = false
-                                errorMessage = msg
-                                showError = true
-                            }
-                        }
-                    }
+                    sendCode()
                 } label: {
                     ZStack {
                         Text("인증번호 받기")
@@ -147,6 +144,7 @@ struct SiginupView: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 31)
                 .padding(.bottom, 32)
+                .padding(.top, 6)
             }
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .topLeading) {
@@ -157,43 +155,11 @@ struct SiginupView: View {
             .navigationDestination(isPresented: $navigateToEmailView) {
                 EmailVerifyView(
                     codeInput: $emailCodeInput,
-                    remainingSeconds: remainingSeconds,
-                    timeString: formatTime(remainingSeconds),
-                    canResend: remainingSeconds == 0,
-                    onTapResend: {
-                        Task {
-                            do {
-                                print("RESEND CODE email =", email, "| trimmed =", email.trimmingCharacters(in: .whitespacesAndNewlines))
-
-                                try await authService.sendVerificationCode(
-                                    email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                                    verificationType: "SIGN_UP"
-                                )
-
-                                await MainActor.run {
-                                    remainingSeconds = 180
-                                }
-                            } catch {
-                                let msg: String
-                                if let apiError = error as? APIError {
-                                    msg = apiError.localizedDescription
-                                } else {
-                                    msg = error.localizedDescription
-                                }
-
-                                await MainActor.run {
-                                    errorMessage = msg
-                                    showError = true
-                                }
-                            }
-                        }
-                    },
                     email: email,
-                    password: "임시비밀번호123",
                     name: name,
                     generation: Int(selectedGrade.prefix(1)) ?? 0,
                     gender: selectedGender == .male ? "MALE" : "FEMALE",
-                    major: "FRONTEND"
+                    major: apiMajor
                 )
             }
             .alert("인증 실패", isPresented: $showError) {
@@ -300,6 +266,7 @@ private extension SiginupView {
                 .padding(.vertical, 14)
         }
         .buttonStyle(.plain)
+       
     }
 
 
@@ -337,7 +304,173 @@ private extension SiginupView {
         let sec = seconds % 60
         return String(format: "%d:%02d", min, sec)
     }
+
+    func sendCode() {
+        guard canSendCode else { return }
+        isLoggingIn = true
+
+        Task {
+            do {
+                let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+                print("SEND CODE email =", email, "| trimmed =", trimmedEmail)
+
+                try await authService.sendVerificationCode(
+                    email: trimmedEmail,
+                    verificationType: "SIGN_UP"
+                )
+
+                await MainActor.run {
+                    isLoggingIn = false
+                    remainingSeconds = 180
+                    navigateToEmailView = true
+                }
+            } catch {
+                let msg: String
+                if let apiError = error as? APIError {
+                    msg = apiError.localizedDescription
+                } else {
+                    msg = error.localizedDescription
+                }
+
+                await MainActor.run {
+                    isLoggingIn = false
+                    errorMessage = msg
+                    showError = true
+                }
+            }
+        }
+    }
 }
+
+private struct MajorChipGrid: View {
+    let items: [String]
+    @Binding var selected: String
+
+    private let itemSpacing: CGFloat = 14
+
+    var body: some View {
+        FlowLayout(spacing: itemSpacing) {
+            ForEach(items, id: \.self) { item in
+                MajorChip(
+                    title: item,
+                    isSelected: selected == item
+                )
+                .onTapGesture {
+                    selected = item
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct MajorChip: View {
+    let title: String
+    let isSelected: Bool
+
+    var body: some View {
+        Text(title)
+            .font(.custom("Pretendard-Medium", size: 14))
+            .foregroundStyle(isSelected ? Color.white : Color("Gray3"))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 15)
+            .padding(.vertical, 15)
+            .background(
+                Capsule()
+                    .fill(isSelected ? Color("Purple1") : Color.white)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(Color("Gray2"), lineWidth: isSelected ? 0 : 1)
+            )
+    }
+}
+
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 14
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
+
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+
+            if x > 0, x + size.width > maxWidth {
+               
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+
+            x += size.width
+            if x < maxWidth { x += spacing }
+            rowHeight = max(rowHeight, size.height)
+        }
+
+        return CGSize(width: proposal.width ?? x, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+
+private extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3:
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6:
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8:
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
+    }
+}
+
+
 
 #Preview {
     SiginupView()

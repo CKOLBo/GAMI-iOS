@@ -135,7 +135,14 @@ final class APIClient {
     }
 
     private func makeRequest(_ endpoint: Endpoint) throws -> URLRequest {
-        var components = URLComponents(url: baseURL.appendingPathComponent(endpoint.path), resolvingAgainstBaseURL: false)
+        let normalizedPath: String = {
+            if endpoint.path.hasPrefix("/") {
+                return String(endpoint.path.dropFirst())
+            }
+            return endpoint.path
+        }()
+
+        var components = URLComponents(url: baseURL.appendingPathComponent(normalizedPath), resolvingAgainstBaseURL: false)
         components?.queryItems = endpoint.queryItems.isEmpty ? nil : endpoint.queryItems
 
         guard let url = components?.url else {

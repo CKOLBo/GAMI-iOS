@@ -13,74 +13,48 @@ struct EmailVerifyView: View {
     private let authService = AuthService()
 
     let email: String
-    let password: String
     let name: String
     let generation: Int
     let gender: String
     let major: String
 
-    @State private var showError: Bool = false
-    @State private var errorMessage: String = ""
-    @State private var navigateToHome: Bool = false
-
     @Binding var codeInput: String
-
-    let remainingSeconds: Int
-    let timeString: String
-    let canResend: Bool
-    let onTapResend: () -> Void
-
-    @State private var isLoggingIn: Bool = false
 
     init(
         codeInput: Binding<String>,
-        remainingSeconds: Int,
-        timeString: String,
-        canResend: Bool,
-        onTapResend: @escaping () -> Void,
         email: String,
-        password: String,
         name: String,
         generation: Int,
         gender: String,
         major: String
     ) {
         self._codeInput = codeInput
-        self.remainingSeconds = remainingSeconds
-        self.timeString = timeString
-        self.canResend = canResend
-        self.onTapResend = onTapResend
-
         self.email = email
-        self.password = password
         self.name = name
         self.generation = generation
         self.gender = gender
         self.major = major
     }
 
-   
-    init(
-        codeInput: Binding<String>,
-        remainingSeconds: Int,
-        timeString: String,
-        canResend: Bool,
-        onTapResend: @escaping () -> Void
-    ) {
-        self.init(
-            codeInput: codeInput,
-            remainingSeconds: remainingSeconds,
-            timeString: timeString,
-            canResend: canResend,
-            onTapResend: onTapResend,
-            email: "",
-            password: "",
-            name: "",
-            generation: 0,
-            gender: "MALE",
-            major: ""
-        )
+    @State private var showError: Bool = false
+    @State private var errorMessage: String = ""
+    @State private var navigateToSginPW: Bool = false
+
+    // 5분 타이머 (300초)
+    @State private var remainingSeconds: Int = 300
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var timeString: String {
+        let min = remainingSeconds / 60
+        let sec = remainingSeconds % 60
+        return String(format: "%d:%02d", min, sec)
     }
+
+    private var canResend: Bool {
+        remainingSeconds == 0
+    }
+
+    @State private var isLoggingIn: Bool = false
 
     private var canSendCode: Bool {
         !isLoggingIn
@@ -128,7 +102,7 @@ struct EmailVerifyView: View {
                 Spacer()
 
                 Button {
-                    onTapResend()
+                    resendCode()
                 } label: {
                     Text("재발송")
                         .font(.custom("Pretendard-Medium", size: 14))
@@ -138,8 +112,14 @@ struct EmailVerifyView: View {
                 .buttonStyle(.plain)
             }
 
-            NavigationLink(isActive: $navigateToHome) {
-                HomeView()
+            NavigationLink(isActive: $navigateToSginPW) {
+                RePWView(
+                    email: email,
+                    name: name,
+                    generation: generation,
+                    gender: gender,
+                    major: major
+                )
             } label: {
                 EmptyView()
             }
@@ -150,6 +130,10 @@ struct EmailVerifyView: View {
         .padding(.horizontal, 31)
         .background(Color.white.ignoresSafeArea())
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .onReceive(timer) { _ in
+            guard remainingSeconds > 0 else { return }
+            remainingSeconds -= 1
+        }
         .safeAreaInset(edge: .bottom) {
             Button {
                 verifyAndSignup()
@@ -198,7 +182,6 @@ struct EmailVerifyView: View {
     }
 
     private func verifyAndSignup() {
-    
         guard !isLoggingIn else { return }
 
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -206,11 +189,6 @@ struct EmailVerifyView: View {
 
         guard !trimmedEmail.isEmpty else {
             errorMessage = "이메일이 비어있어요."
-            showError = true
-            return
-        }
-        guard !password.isEmpty else {
-            errorMessage = "비밀번호가 비어있어요."
             showError = true
             return
         }
@@ -223,7 +201,6 @@ struct EmailVerifyView: View {
         isLoggingIn = true
 
         Task {
-           
             defer {
                 Task { @MainActor in
                     isLoggingIn = false
@@ -231,31 +208,48 @@ struct EmailVerifyView: View {
             }
 
             do {
-             
                 try await authService.verifyEmailCode(email: trimmedEmail, code: trimmedCode)
 
-          
-                try await authService.signup(
+                await MainActor.run {
+                    navigateToSginPW = true
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showError = true
+                }
+            }
+        }
+    }
+
+    private func resendCode() {
+        guard !isLoggingIn else { return }
+
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedEmail.isEmpty else {
+            errorMessage = "이메일이 비어있어요."
+            showError = true
+            return
+        }
+
+        isLoggingIn = true
+
+        Task {
+            defer {
+                Task { @MainActor in
+                    isLoggingIn = false
+                }
+            }
+
+            do {
+                try await authService.sendVerificationCode(
                     email: trimmedEmail,
-                    password: password,
-                    name: name,
-                    generation: generation,
-                    gender: gender,
-                    major: major
+                    verificationType: "SIGN_UP"
                 )
 
-               
-                let res = try await authService.signin(email: trimmedEmail, password: password)
-
-                UserDefaults.standard.set(res.accessToken, forKey: "accessToken")
-                UserDefaults.standard.set(res.refreshToken, forKey: "refreshToken")
-                UserDefaults.standard.set(res.accessTokenExpiresIn, forKey: "accessTokenExpiresIn")
-                UserDefaults.standard.set(res.refreshTokenExpiresIn, forKey: "refreshTokenExpiresIn")
-
                 await MainActor.run {
-                    navigateToHome = true
+                    remainingSeconds = 300
                 }
-
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
@@ -269,15 +263,10 @@ struct EmailVerifyView: View {
 #Preview {
     EmailVerifyView(
         codeInput: .constant("123456"),
-        remainingSeconds: 120,
-        timeString: "2:00",
-        canResend: false,
-        onTapResend: {},
         email: "test@test.com",
-        password: "12345678",
         name: "테스트",
         generation: 9,
         gender: "MALE",
-        major: "SOFTWARE"
+        major: "FRONTEND"
     )
 }

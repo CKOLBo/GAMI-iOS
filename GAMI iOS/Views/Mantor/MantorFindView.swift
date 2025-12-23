@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct MantorFindView: View {
+struct MentorFindView: View {
     @State private var searchText: String = ""
     
     private let mentors: [Mentor] = [
@@ -66,6 +66,7 @@ struct MantorFindView: View {
         
         .frame(maxWidth: .infinity,alignment: .topLeading)
         .ignoresSafeArea()
+        .navigationBarBackButtonHidden(true)
         
     }
     
@@ -111,5 +112,5 @@ struct MantorFindView: View {
 }
 
 #Preview {
-    MantorFindView()
+    MentorFindView()
 }

@@ -66,6 +66,7 @@ struct MyPageView: View {
                 }
             }
         }
+        .ignoresSafeArea()
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

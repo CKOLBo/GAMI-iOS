@@ -24,7 +24,8 @@ struct HomeView: View{
     ]
 
     var body: some View{
-        ScrollView{
+        NavigationStack {
+            ScrollView{
             VStack(alignment: .leading, spacing: 0){
                 Text("홈")
                     .font(.custom( "Pretendard-Bold", size: 30)
@@ -76,8 +77,13 @@ struct HomeView: View{
                     .padding(.top, 28)
                 
                 
-                MentorBar()
-                    .padding(.top, 12)
+                NavigationLink {
+                    MentorFindView()
+                } label: {
+                    MentorBar()
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 12)
                 
                 Text("익명게시판")
                     .font(.custom("Pretendard-Bold", size: 20))
@@ -86,7 +92,19 @@ struct HomeView: View{
                 
                 LazyVStack(spacing: 12) {
                     ForEach(posts) { post in
-                        BoardBar(post: post)
+                        NavigationLink {
+                            BoardDetailView(
+                                post: BoardPostModel(
+                                    title: post.title,
+                                    subtitle: post.content,
+                                    body: post.content,
+                                    likeCount: post.likeCount
+                                )
+                            )
+                        } label: {
+                            BoardBar(post: post)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.top, 12)
@@ -97,6 +115,7 @@ struct HomeView: View{
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.horizontal, 32)
 
+            }
         }
         .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)

@@ -8,11 +8,11 @@
 import SwiftUI
 
 struct RePWView: View {
-    // 회원가입(비밀번호 설정) 단계에서 서버에 넘길 기본 정보
+    
     let email: String
     let name: String
     let generation: Int
-    let gender: String   // "MALE" / "FEMALE"
+    let gender: String
     let major: String
 
     private let authService = AuthService()
@@ -144,15 +144,15 @@ struct RePWView: View {
 
 private extension RePWView {
     func validatePassword(_ pw: String) -> String? {
-        // 8자 이상
+     
         guard pw.count >= 8 else { return "비밀번호는 8자 이상 입력해 주세요." }
 
-        // 영어(대소문자) 포함: 대문자 1개 이상 + 소문자 1개 이상
+        
         let hasUpper = pw.rangeOfCharacter(from: .uppercaseLetters) != nil
         let hasLower = pw.rangeOfCharacter(from: .lowercaseLetters) != nil
         guard hasUpper && hasLower else { return "비밀번호는 영문 대문자와 소문자를 모두 포함해야 합니다." }
 
-        // 특수문자: 허용(필수 아님) → 별도 강제 없음
+       
         return nil
     }
     func backButton() -> some View {
@@ -346,7 +346,7 @@ private extension RePWView {
             do {
                 let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                // 1) 회원가입 (RePWView에서 최종 비밀번호 확정)
+        
                 try await authService.signup(
                     email: trimmedEmail,
                     password: newPassword,
@@ -356,7 +356,7 @@ private extension RePWView {
                     major: major
                 )
 
-                // 2) 바로 로그인해서 토큰 저장
+                
                 let res = try await authService.signin(
                     email: trimmedEmail,
                     password: newPassword

@@ -40,7 +40,7 @@ struct EmailVerifyView: View {
     @State private var errorMessage: String = ""
     @State private var navigateToSginPW: Bool = false
 
-    // 5분 타이머 (300초)
+
     @State private var remainingSeconds: Int = 300
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 

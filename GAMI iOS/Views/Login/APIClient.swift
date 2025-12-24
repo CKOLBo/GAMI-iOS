@@ -123,15 +123,16 @@ final class APIClient {
 
     func requestNoBody(_ endpoint: Endpoint) async throws {
         let request = try makeRequest(endpoint)
-        let (_, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         guard let http = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
 
         guard (200...299).contains(http.statusCode) else {
-            throw APIError.httpStatus(http.statusCode, nil)
+            throw APIError.httpStatus(http.statusCode, data)
         }
+        // success: ignore body
     }
 
     private func makeRequest(_ endpoint: Endpoint) throws -> URLRequest {

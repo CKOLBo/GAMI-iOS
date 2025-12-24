@@ -15,7 +15,8 @@ struct BoardPost: Identifiable {
     let commentCount: Int
 }
 
-struct HomeView: View{
+struct HomeView: View {
+    @Binding var selection: TabbarView.Tab
 
     @State private var posts: [BoardPost] = [
         .init(title: "제목제목김준표", content: "내용내용내용김준표내용", likeCount: 3, commentCount: 3),
@@ -24,7 +25,6 @@ struct HomeView: View{
     ]
 
     var body: some View{
-        NavigationStack {
             ScrollView{
             VStack(alignment: .leading, spacing: 0){
                 Text("홈")
@@ -77,8 +77,8 @@ struct HomeView: View{
                     .padding(.top, 28)
                 
                 
-                NavigationLink {
-                    MentorFindView()
+                Button {
+                    selection = .mentor
                 } label: {
                     MentorBar()
                 }
@@ -116,7 +116,6 @@ struct HomeView: View{
             .padding(.horizontal, 32)
 
             }
-        }
         .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -238,6 +237,6 @@ struct HomeView: View{
 
 
 
-#Preview{
-    HomeView()
+#Preview {
+    HomeView(selection: .constant(.home))
 }

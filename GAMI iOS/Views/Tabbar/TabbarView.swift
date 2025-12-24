@@ -25,38 +25,40 @@ struct TabbarView: View {
     }
 
     var body: some View {
-        TabView(selection: $selection) {
-            HomeView()
-                .tabItem {
-                    Label("홈", image: "Home")
-                }
-                .tag(Tab.home)
+        NavigationStack {
+            TabView(selection: $selection) {
+                HomeView(selection: $selection)
+                    .tabItem {
+                        Label("홈", image: "Home")
+                    }
+                    .tag(Tab.home)
 
-            MentorFindView()
-                .tabItem {
-                    Label("멘토찾기", image: "People")
-                }
-                .tag(Tab.mentor)
+                MentorFindView()
+                    .tabItem {
+                        Label("멘토찾기", image: "People")
+                    }
+                    .tag(Tab.mentor)
 
-            ChatView()
-                .tabItem {
-                    Label("채팅", image: "Chat")
-                }
-                .tag(Tab.chat)
+                ChatView()
+                    .tabItem {
+                        Label("채팅", image: "Chat")
+                    }
+                    .tag(Tab.chat)
 
-            BoardHomeView()
-                .tabItem {
-                    Label("익명게시판", image: "Peoples")
-                }
-                .tag(Tab.board)
+                BoardHomeView()
+                    .tabItem {
+                        Label("익명게시판", image: "Peoples")
+                    }
+                    .tag(Tab.board)
 
-            MyPageView()
-                .tabItem {
-                    Label("마이페이지", image: "Me")
-                }
-                .tag(Tab.mypage)
+                MyPageView()
+                    .tabItem {
+                        Label("마이페이지", image: "ME")
+                    }
+                    .tag(Tab.mypage)
+            }
+            .tint(Color("Purple1"))
         }
-        .tint(Color("Purple1"))
     }
 }
 

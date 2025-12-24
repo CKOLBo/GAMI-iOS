@@ -7,15 +7,8 @@
 
 import SwiftUI
 
-struct Mentor: Identifiable{
-        let id = UUID()
-        let name: String
-        let grade: String
-        let role: String
-    }
-
 struct MentorCardView: View {
-    let mentor: Mentor
+    let mentor: MentorSummaryDTO
     let onApply: () -> Void
     
     var body: some View {
@@ -33,7 +26,7 @@ struct MentorCardView: View {
                     .foregroundColor(Color("Gray1"))
 
                 HStack(spacing: 4) {
-                    Text(mentor.grade)
+                    Text("\(mentor.generation)기")
                         .font(.custom("Pretendard-Bold", size: 10))
                         .foregroundColor(.white)
                         .lineLimit(1)
@@ -43,7 +36,7 @@ struct MentorCardView: View {
                         .background(Color("Blue1"))
                         .cornerRadius(4)
 
-                    Text(mentor.role)
+                    Text(mentor.major)
                         .font(.custom("Pretendard-Bold", size: 10))
                         .foregroundColor(.white)
                         .lineLimit(1)
@@ -90,9 +83,15 @@ struct MentorCardView: View {
 
 #Preview {
     MentorCardView(
-        mentor: Mentor(name: "양은준", grade: "9기", role: "FE"),
+        mentor: MentorSummaryDTO(
+            memberId: 1,
+            name: "양은준",
+            gender: "MALE",
+            generation: 9,
+            major: "FRONTEND"
+        ),
         onApply: {
-            print("ㅁㅁ")
+            print("멘토 신청")
         }
     )
 }

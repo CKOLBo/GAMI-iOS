@@ -10,20 +10,25 @@ import SwiftUI
 struct MentorFindView: View {
     @State private var searchText: String = ""
     
-    private let mentors: [Mentor] = [
-        .init(name: "양은준", grade: "9기", role: "FE"),
-        .init(name: "문깜댕이", grade: "9기", role: "FE"),
-        .init(name: "김준표", grade: "9기", role: "iOS"),
-        .init(name: "문문문", grade: "9기", role: "FE")
-    ]
+    @State private var mentors: [MentorSummaryDTO] = []
+    @State private var isLoading: Bool = false
+    @State private var showError: Bool = false
+    @State private var errorMessage: String = ""
+    @State private var isApplying: Bool = false
+    @State private var showApplyAlert: Bool = false
+    @State private var applyAlertMessage: String = ""
+
+    private let service = MentorService()
     
-    private var filteredMentors: [Mentor] {
+    private var filteredMentors: [MentorSummaryDTO] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if q.isEmpty { return mentors }
+        guard !q.isEmpty else { return mentors }
+
         return mentors.filter { mentor in
-            mentor.name.localizedCaseInsensitiveContains(q) ||
-            mentor.grade.localizedCaseInsensitiveContains(q) ||
-            mentor.role.localizedCaseInsensitiveContains(q)
+            let genText = "\(mentor.generation)기"
+            return mentor.name.localizedCaseInsensitiveContains(q)
+            || genText.localizedCaseInsensitiveContains(q)
+            || mentor.major.localizedCaseInsensitiveContains(q)
         }
     }
     var body: some View {
@@ -55,7 +60,9 @@ struct MentorFindView: View {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(filteredMentors) { mentor in
                         MentorCardView(mentor: mentor) {
-                            print("\(mentor.name) 멘토 신청")
+                            Task {
+                                await applyMentor(mentorId: mentor.memberId)
+                            }
                         }
                     }
                 }
@@ -63,10 +70,22 @@ struct MentorFindView: View {
                 .padding(.horizontal, 31)
             }
         }
-        
+        .task {
+            await fetchMentors()
+        }
         .frame(maxWidth: .infinity,alignment: .topLeading)
         .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)
+        .alert("오류", isPresented: $showError) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+        .alert("멘토 신청", isPresented: $showApplyAlert) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(applyAlertMessage)
+        }
         
     }
     
@@ -108,6 +127,36 @@ struct MentorFindView: View {
         }
         
         
+    }
+    
+    @MainActor
+    private func fetchMentors() async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            mentors = try await service.fetchMentorsAll(page: 0, size: 10)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+    
+    @MainActor
+    private func applyMentor(mentorId: Int) async {
+        guard !isApplying else { return }
+        isApplying = true
+        defer { isApplying = false }
+
+        do {
+            _ = try await service.applyMentor(mentorId: mentorId)
+            applyAlertMessage = "멘토 신청이 완료되었어요."
+            showApplyAlert = true
+        } catch {
+            applyAlertMessage = error.localizedDescription
+            showApplyAlert = true
+        }
     }
 }
 

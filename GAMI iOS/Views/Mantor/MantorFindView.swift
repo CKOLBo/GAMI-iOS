@@ -19,6 +19,9 @@ struct MentorFindView: View {
     @State private var applyAlertMessage: String = ""
 
     private let service = MentorService()
+    private var accessToken: String {
+        UserDefaults.standard.string(forKey: "accessToken")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
     
     private var filteredMentors: [MentorSummaryDTO] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -70,7 +73,14 @@ struct MentorFindView: View {
                 .padding(.horizontal, 31)
             }
         }
-        .task {
+        .task(id: accessToken) {
+            print("✅ MentorFind accessToken =", UserDefaults.standard.string(forKey: "accessToken") ?? "nil")
+           
+            guard !accessToken.isEmpty else {
+                errorMessage = "로그인이 필요합니다. 로그인 후 다시 시도해주세요."
+                showError = true
+                return
+            }
             await fetchMentors()
         }
         .frame(maxWidth: .infinity,alignment: .topLeading)
@@ -162,4 +172,8 @@ struct MentorFindView: View {
 
 #Preview {
     MentorFindView()
+        .onAppear {
+          
+            UserDefaults.standard.set("preview_dummy_token", forKey: "accessToken")
+        }
 }

@@ -158,18 +158,18 @@ struct ChatView: View {
     }
     @MainActor
     private func handleAccept(_ item: MentorApplyDTO) {
-        // 서버가 name을 빈 문자열로 줄 수도 있어서 정규화
+        
         let rawName = (item.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let chatName = rawName.isEmpty ? "멘티" : rawName
 
-        // 너무 넓은 contains() 때문에 막히는 케이스가 있어서, 완전 일치 기준으로만 중복 방지
+       
         if chats.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == chatName }) {
-            // 이미 있으면 맨 위로만 올려주기
+           
             if let idx = chats.firstIndex(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == chatName }) {
                 let existing = chats.remove(at: idx)
                 chats.insert(existing, at: 0)
             }
-            // 리스트가 바로 보이도록
+           
             selectedTab = .chat
             searchText = ""
             return
@@ -180,7 +180,7 @@ struct ChatView: View {
             at: 0
         )
 
-        // 리스트가 바로 보이도록
+     
         selectedTab = .chat
         searchText = ""
     }
@@ -367,18 +367,18 @@ struct ChatView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea()
-                .navigationDestination(item: $selectedChat) { chat in
-                    ChatRoomView(title: chat.name)
-                }
 
-            if isMentorModalPresented {
-                MentorRequestModal(
-                    isPresented: $isMentorModalPresented,
-                    items: $mentorRequests,
-                    onAccept: handleAccept
-                )
+                if isMentorModalPresented {
+                    MentorRequestModal(
+                        isPresented: $isMentorModalPresented,
+                        items: $mentorRequests,
+                        onAccept: handleAccept
+                    )
+                }
             }
-        }
+            .navigationDestination(item: $selectedChat) { chat in
+                ChatRoomView(title: chat.name)
+            }
     }
 }
 
@@ -406,4 +406,3 @@ struct ChatView: View {
 
     return MentorModalPreviewHost()
 }
- 

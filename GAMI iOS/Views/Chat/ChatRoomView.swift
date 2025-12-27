@@ -26,6 +26,7 @@ struct ChatRoomView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var messageText: String = ""
+    @FocusState private var isInputFocused: Bool
     @State private var showLeaveDialog: Bool = false
 
     @State private var messages: [ChatMessage] = [
@@ -36,50 +37,79 @@ struct ChatRoomView: View {
     ]
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                header
-                
-                Rectangle()
-                    .fill(Color("Gray2"))
-                    .frame(height: 1)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 26)
+        GeometryReader { geo in
+            ScrollViewReader { scrollProxy in
+                ZStack {
+                    VStack(spacing: 0) {
+                        header
+                            .padding(.top, geo.safeAreaInsets.top)
 
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        dateChip("2025년 12월 03일")
-                        ForEach(messages) { msg in
-                            messageRow(msg)
+                        Rectangle()
+                            .fill(Color("Gray2"))
+                            .frame(height: 1)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 26)
+
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                dateChip("2025년 12월 03일")
+
+                                ForEach(messages) { msg in
+                                    messageRow(msg)
+                                        .id(msg.id)
+                                }
+
+                                Spacer(minLength: 12)
+                            }
+                            .padding(.top, 24)
+                            .padding(.horizontal, 20)
                         }
-
-                        Spacer(minLength: 12)
+                        .onTapGesture {
+                            isInputFocused = false
+                        }
+                        .onChange(of: messages.count) { _ in
+                           
+                            if let last = messages.last {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    scrollProxy.scrollTo(last.id, anchor: .bottom)
+                                }
+                            }
+                        }
+                        .onChange(of: isInputFocused) { _ in
+                         
+                            if isInputFocused, let last = messages.last {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        scrollProxy.scrollTo(last.id, anchor: .bottom)
+                                    }
+                                }
+                            }
+                        }
                     }
-                    .padding(.top, 24)
-                    .padding(.horizontal, 20)
+                    .navigationBarBackButtonHidden(true)
+                    .background(Color.white)
+                    .safeAreaInset(edge: .bottom) {
+                        inputBar
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                            .background(Color.white)
+                    }
+
+                    if showLeaveDialog {
+                        LeaveChatDialog(
+                            onCancel: { showLeaveDialog = false },
+                            onLeave: {
+                                showLeaveDialog = false
+                                if let onLeave {
+                                    onLeave()
+                                } else {
+                                    dismiss()
+                                }
+                            }
+                        )
+                        .transition(.opacity)
+                    }
                 }
-
-                inputBar
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-            }
-            .navigationBarBackButtonHidden(true)
-            .background(Color.white)
-            .ignoresSafeArea()
-
-            if showLeaveDialog {
-                LeaveChatDialog(
-                    onCancel: { showLeaveDialog = false },
-                    onLeave: {
-                        showLeaveDialog = false
-                        if let onLeave {
-                            onLeave()
-                        } else {
-                            dismiss()
-                        }
-                    }
-                )
-                .transition(.opacity)
             }
         }
     }
@@ -95,11 +125,11 @@ struct ChatRoomView: View {
                         .font(.custom("Pretendard-Medium", size: 16))
                         .foregroundColor(Color("Gray3"))
                 }
+                .padding(.top, -50)
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 12)
-            .padding(.top, 16)
 
             Button {
                 showLeaveDialog = true
@@ -114,10 +144,8 @@ struct ChatRoomView: View {
                             .fill(Color("Red1"))
                     )
             } .padding(.leading, 20)
-                .padding(.top, 92)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
         .overlay(alignment: .center) {
             HStack(spacing: 0) {
                 Image("profiles 1")
@@ -150,7 +178,6 @@ struct ChatRoomView: View {
                 }
                 .padding(.leading, 16)
             }
-            .padding(.top, 84)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 28)
             
@@ -197,6 +224,7 @@ struct ChatRoomView: View {
     private var inputBar: some View {
         HStack(spacing: 0) {
             TextField("", text: $messageText, prompt: Text("메시지").foregroundStyle(Color("Gray3")))
+                .focused($isInputFocused)
                 .font(.custom("Pretendard-Bold", size: 12))
                 .padding(.leading, 20)
                 .foregroundStyle(Color("Gray3"))
@@ -207,6 +235,7 @@ struct ChatRoomView: View {
                 guard !trimmed.isEmpty else { return }
                 messages.append(.init(text: trimmed, isMe: true))
                 messageText = ""
+                isInputFocused = true
             } label: {
                 Text("보내기")
                     .font(.custom("Pretendard-Bold", size: 12))

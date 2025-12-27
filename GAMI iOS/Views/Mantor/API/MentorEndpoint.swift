@@ -1,22 +1,22 @@
 import Foundation
 
 enum MentorEndpoint: Endpoint {
-    /// 전공/이름/기수 조건으로 멘토 목록 조회 (페이징)
+  
     case fetchMentorsAll(major: String?, name: String?, generation: Int?, page: Int, size: Int)
 
-    /// 조건에 맞는 멘토 1명 랜덤 추천
+    
     case fetchRandomMentor
 
-    /// 특정 멘토에게 멘토링 신청 (body 없음)
+  
     case apply(mentorId: Int)
 
-    /// 내가 보낸 멘토링 신청 목록
+
     case fetchSentApplies
 
-    /// 내가 받은 멘토링 신청 목록
+
     case fetchReceivedApplies
 
-    /// 멘토링 신청 상태 변경
+
     case patchApplyStatus(id: Int, applyStatus: String)
 }
 
@@ -67,9 +67,24 @@ extension MentorEndpoint {
 
     var headers: [String: String] {
         var headers: [String: String] = ["Content-Type": "application/json"]
-        if let token = UserDefaults.standard.string(forKey: "accessToken") {
-            headers["Authorization"] = "Bearer \(token)"
+
+       
+        if let saved = UserDefaults.standard.string(forKey: "accessToken") {
+            let trimmed = saved.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                let token = trimmed.hasPrefix("Bearer ") ? String(trimmed.dropFirst("Bearer ".count)) : trimmed
+                headers["Authorization"] = "Bearer \(token)"
+            } else {
+                #if DEBUG
+                print("⚠️ accessToken is empty. Authorization header will be omitted.")
+                #endif
+            }
+        } else {
+            #if DEBUG
+            print("⚠️ accessToken is nil. Authorization header will be omitted.")
+            #endif
         }
+
         return headers
     }
 
@@ -79,7 +94,7 @@ extension MentorEndpoint {
             let body: [String: Any] = ["applyStatus": applyStatus]
             return try? JSONSerialization.data(withJSONObject: body)
         default:
-            // apply(mentorId)는 Swagger 기준 body 없음
+           
             return nil
         }
     }

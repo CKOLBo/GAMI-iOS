@@ -11,6 +11,8 @@ struct LoginView: View {
     
 
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("accessToken") private var storedAccessToken: String = ""
+    @AppStorage("refreshToken") private var storedRefreshToken: String = ""
     private let authService = AuthService()
 
     @State private var email: String = ""
@@ -20,7 +22,6 @@ struct LoginView: View {
     @State private var isLoggingIn: Bool = false
     @State private var showLoginError: Bool = false
     @State private var loginErrorMessage: String = ""
-    @State private var navigateToMainTab: Bool = false
 
     @State private var navigateToEmailView: Bool = false
 
@@ -35,7 +36,9 @@ struct LoginView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        
+ 
+        
             VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer()
@@ -60,13 +63,6 @@ struct LoginView: View {
             Spacer(minLength: 0)
 
            
-            NavigationLink(isActive: $navigateToMainTab) {
-                TabbarView()
-            } label: {
-                EmptyView()
-            }
-            .hidden()
-
             NavigationLink(isActive: $navigateToEmailView) {
                 EmailView()
             } label: {
@@ -97,7 +93,7 @@ struct LoginView: View {
             .padding(.bottom, 32)
             
             }
-        }
+        
         .onAppear {
             print("BASE URL =", Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") ?? "nil")
         }
@@ -224,15 +220,20 @@ private extension LoginView {
             do {
                 let res = try await authService.signin(email: email, password: password)
 
-    
+              
+                storedAccessToken = res.accessToken
+                storedRefreshToken = res.refreshToken
+
                 UserDefaults.standard.set(res.accessToken, forKey: "accessToken")
                 UserDefaults.standard.set(res.refreshToken, forKey: "refreshToken")
                 UserDefaults.standard.set(res.accessTokenExpiresIn, forKey: "accessTokenExpiresIn")
                 UserDefaults.standard.set(res.refreshTokenExpiresIn, forKey: "refreshTokenExpiresIn")
 
+                print("✅ saved accessToken =", storedAccessToken.isEmpty ? "EMPTY" : "(len: \(storedAccessToken.count))")
+
                 await MainActor.run {
                     isLoggingIn = false
-                    navigateToMainTab = true
+                  
                 }
             } catch {
                 let message: String

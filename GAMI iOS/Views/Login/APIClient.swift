@@ -9,6 +9,7 @@ import Foundation
 
 
 
+
 enum HTTPMethod: String {
     case get = "GET"
     case post = "POST"
@@ -102,13 +103,26 @@ final class APIClient {
 
     func request<T: Decodable>(_ endpoint: Endpoint, as type: T.Type = T.self) async throws -> T {
         let request = try makeRequest(endpoint)
+        #if DEBUG
+        print("➡️ REQUEST \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "nil")")
+        if let bodyData = request.httpBody, let bodyString = String(data: bodyData, encoding: .utf8) {
+            print("➡️ REQUEST BODY = \(bodyString)")
+        }
+        #endif
         let (data, response) = try await session.data(for: request)
 
         guard let http = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
+        #if DEBUG
+        print("⬅️ RESPONSE status=\(http.statusCode) bytes=\(data.count)")
+        #endif
 
         guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            let body = String(data: data, encoding: .utf8)
+            print("❌ HTTP \(http.statusCode) | body=\(body ?? "<non-utf8 or empty>")")
+            #endif
             throw APIError.httpStatus(http.statusCode, data)
         }
 
@@ -117,6 +131,10 @@ final class APIClient {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             return try decoder.decode(T.self, from: data)
         } catch {
+            #if DEBUG
+            let raw = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("❌ DECODING FAILED: \(error) | raw=\(raw)")
+            #endif
             throw APIError.decoding(error)
         }
     }
@@ -132,7 +150,7 @@ final class APIClient {
         guard (200...299).contains(http.statusCode) else {
             throw APIError.httpStatus(http.statusCode, data)
         }
-        // success: ignore body
+     
     }
 
     private func makeRequest(_ endpoint: Endpoint) throws -> URLRequest {
@@ -324,7 +342,19 @@ final class AuthService {
             body: body
         )
 
-        return try await client.request(endpoint, as: LoginResponseDTO.self)
+        let response = try await client.request(endpoint, as: LoginResponseDTO.self)
+
+   
+        UserDefaults.standard.set(response.accessToken, forKey: "accessToken")
+        UserDefaults.standard.set(response.refreshToken, forKey: "refreshToken")
+        UserDefaults.standard.set(response.accessTokenExpiresIn, forKey: "accessTokenExpiresIn")
+        UserDefaults.standard.set(response.refreshTokenExpiresIn, forKey: "refreshTokenExpiresIn")
+
+        #if DEBUG
+        print("✅ signin OK | accessToken len=\(response.accessToken.count) | refreshToken len=\(response.refreshToken.count)")
+        #endif
+
+        return response
     }
 
 
@@ -372,7 +402,19 @@ final class AuthService {
             body: nil
         )
 
-        return try await client.request(endpoint, as: ReissueResponseDTO.self)
+        let response = try await client.request(endpoint, as: ReissueResponseDTO.self)
+
+      
+        UserDefaults.standard.set(response.accessToken, forKey: "accessToken")
+        UserDefaults.standard.set(response.refreshToken, forKey: "refreshToken")
+        UserDefaults.standard.set(response.accessTokenExpiresIn, forKey: "accessTokenExpiresIn")
+        UserDefaults.standard.set(response.refreshTokenExpiresIn, forKey: "refreshTokenExpiresIn")
+
+        #if DEBUG
+        print("✅ reissue OK | accessToken len=\(response.accessToken.count) | refreshToken len=\(response.refreshToken.count)")
+        #endif
+
+        return response
     }
 
 
@@ -400,5 +442,10 @@ final class AuthService {
         )
 
         try await client.requestNoBody(endpoint)
+
+        
+        UserDefaults.standard.removeObject(forKey: "accessToken")
+        UserDefaults.standard.removeObject(forKey: "refreshToken")
+        UserDefaults.standard.synchronize()
     }
 }

@@ -10,6 +10,12 @@ import SwiftUI
 struct EmailView: View {
     @Environment(\.dismiss) private var dismiss
 
+    // EmailVerifyView에서 요구하는 회원가입 컨텍스트(EmailView에서는 임시값으로 유지)
+    private let name: String = ""
+    private let generation: Int = 0
+    private let gender: String = "MALE"
+    private let major: String = "FRONTEND"
+
     @State private var email: String = ""
     @State private var isLoggingIn: Bool = false
     @State private var showLoginError: Bool = false
@@ -101,10 +107,11 @@ struct EmailView: View {
             .navigationDestination(isPresented: $showVerifyView) {
                 EmailVerifyView(
                     codeInput: $codeInput,
-                    remainingSeconds: remainingSeconds,
-                    timeString: timeString,
-                    canResend: canResend,
-                    onTapResend: resendCode
+                    email: email,
+                    name: name,
+                    generation: generation,
+                    gender: gender,
+                    major: major
                 )
             }
         }
@@ -148,12 +155,6 @@ private extension EmailView {
 
     func sendCode() {
         guard canSendCode else { return }
-
-        guard isEmailValid else {
-            loginErrorMessage = "이메일에 @gsm 이 포함되어야 합니다."
-            showLoginError = true
-            return
-        }
 
         isLoggingIn = true
 

@@ -136,7 +136,7 @@ struct ChatView: View {
     ]
     @State private var isMentorModalPresented: Bool = false
     @State private var mentorRequests: [MentorApplyDTO] = []
-    @State private var selectedChatName: String? = nil
+    @State private var selectedChat: ChatItem? = nil
 
     @State private var chats: [ChatItem] = [
         .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
@@ -346,7 +346,7 @@ struct ChatView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
-                                        selectedChatName = chat.name
+                                        selectedChat = chat
                                     }
                                     .listRowSeparator(.hidden)
                                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
@@ -367,8 +367,8 @@ struct ChatView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea()
-                .navigationDestination(item: $selectedChatName) { name in
-                    ChatRoomView(title: name)
+                .navigationDestination(item: $selectedChat) { chat in
+                    ChatRoomView(title: chat.name)
                 }
 
             if isMentorModalPresented {

@@ -8,9 +8,11 @@
 import SwiftUI
 
 struct ChatItem: Identifiable, Hashable {
-    let id = UUID()
+    let id: Int
     let name: String
     let lastMessage: String
+    let major: String
+    let generation: Int
 }
 
 struct ChatRequestItem: Identifiable, Hashable {
@@ -138,15 +140,10 @@ struct ChatView: View {
     @State private var mentorRequests: [MentorApplyDTO] = []
     @State private var selectedChat: ChatItem? = nil
 
-    @State private var chats: [ChatItem] = [
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대")
-    ]
+    @State private var chats: [ChatItem] = []
 
     private let mentorService = MentorService()
+    private let chatService = ChatService()
 
     private var filteredChats: [ChatItem] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -158,29 +155,21 @@ struct ChatView: View {
     }
     @MainActor
     private func handleAccept(_ item: MentorApplyDTO) {
-        
         let rawName = (item.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let chatName = rawName.isEmpty ? "멘티" : rawName
-
-       
         if chats.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == chatName }) {
-           
             if let idx = chats.firstIndex(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == chatName }) {
                 let existing = chats.remove(at: idx)
                 chats.insert(existing, at: 0)
             }
-           
             selectedTab = .chat
             searchText = ""
             return
         }
-
         chats.insert(
-            ChatItem(name: chatName, lastMessage: "멘토링이 시작되었어요."),
+            ChatItem(id: -Int(item.applyId), name: chatName, lastMessage: "멘토링이 시작되었어요.", major: "", generation: 0),
             at: 0
         )
-
-     
         selectedTab = .chat
         searchText = ""
     }
@@ -367,6 +356,19 @@ struct ChatView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea()
+                .task {
+               
+                    do {
+                        let rooms = try await chatService.fetchRooms()
+                        await MainActor.run {
+                            self.chats = rooms.map { r in
+                                ChatItem(id: r.id, name: r.name, lastMessage: r.lastMessage, major: r.major, generation: r.generation)
+                            }
+                        }
+                    } catch {
+                        print("패치룸 에러 : ", error)
+                    }
+                }
 
                 if isMentorModalPresented {
                     MentorRequestModal(
@@ -377,7 +379,7 @@ struct ChatView: View {
                 }
             }
             .navigationDestination(item: $selectedChat) { chat in
-                ChatRoomView(title: chat.name)
+                ChatRoomView(roomId: chat.id, title: chat.name)
             }
     }
 }

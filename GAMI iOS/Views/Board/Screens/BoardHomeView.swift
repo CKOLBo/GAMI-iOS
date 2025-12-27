@@ -9,15 +9,17 @@
 import SwiftUI
 
 struct BoardHomeView: View {
-    private let posts: [(title: String, preview: String, like: Int, comment: Int, imageName: String?)] = [
-        ("제목제목김준표s", "내용내용내용김준표내용", 3, 0, nil),
-        ("GSM에서 살아남는 방법", "제가 GSM에서 살아남는 방법을 알려 드리겠습니다!", 3, 0, nil),
-        ("제목제목김준표s", "내용내용내용김준표내용", 3, 0, nil),
-        ("제목제목김준표s", "내용내용내용김준표내용", 3, 0, nil),
-        ("제목제목김준표s", "내용내용내용김준표내용", 3, 0, nil)
-        
-    ]
+    @State private var posts: [BoardPostItemDTO] = []
+    @State private var isLoading: Bool = false
+    @State private var errorMessage: String? = nil
+
+    @State private var page: Int = 0
+    @State private var hasMore: Bool = true
+    @State private var loadGen: Int = 0
+
+    private let postService = PostService()
     @State private var searchText: String = ""
+    @State private var searchDebounceTask: Task<Void, Never>? = nil
     @State private var isReportModalPresented: Bool = false
     @State private var reportReason: String = "개인정보 노출"
     @State private var reportDetail: String = ""
@@ -31,6 +33,66 @@ struct BoardHomeView: View {
         "게시판 목적과 맞지 않는 내용",
         "기타"
     ]
+    
+    private func previewText(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count <= 60 { return trimmed }
+        return String(trimmed.prefix(60)) + "…"
+    }
+
+    private func loadFirstPage() {
+        loadGen += 1
+        let gen = loadGen
+        print("에러띠 gen=\(gen) keyword='\(searchText)' ")
+
+        page = 0
+        hasMore = true
+        posts = []
+        errorMessage = nil
+
+    
+        isLoading = false
+
+        Task { await loadMore(gen: gen) }
+    }
+
+    @MainActor
+    private func loadMore(gen: Int) async {
+        print("홈뷰 불러오기 실패 gen=\(gen) loadGen=\(loadGen) page=\(page) hasMore=\(hasMore) isLoading=\(isLoading) keyword='\(searchText)'")
+      
+        guard gen == loadGen else { return }
+        guard !isLoading, hasMore else { return }
+
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            print("➡️ REQUEST GET /api/post?page=\(page)&size=10&sort=createdAt,desc&keyword=\(searchText.isEmpty ? "" : searchText)")
+            let res = try await postService.fetchPostList(
+                keyword: searchText.isEmpty ? nil : searchText,
+                page: page,
+                size: 10,
+                sort: "createdAt,desc"
+            )
+            print("⬅️ RESPONSE posts=\(res.content.count) last=\(res.last) totalElements=\(res.totalElements) totalPages=\(res.totalPages)")
+
+          
+            guard gen == loadGen else { return }
+
+            posts.append(contentsOf: res.content)
+
+            hasMore = !res.last
+            page += 1
+        } catch {
+            errorMessage = "게시글을 불러오지 못했어요.\n\(error.localizedDescription)"
+        }
+    }
+
+    private func refreshWithCurrentKeyword() {
+        
+        loadFirstPage()
+    }
     
     var body: some View {
         NavigationStack {
@@ -48,6 +110,14 @@ struct BoardHomeView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(spacing: 0) {
                             BoardSearchBar(searchText: $searchText)
+                                .onChange(of: searchText) { _, _ in
+                                    searchDebounceTask?.cancel()
+                                    searchDebounceTask = Task { @MainActor in
+                                        try? await Task.sleep(nanoseconds: 300_000_000)
+                                        guard !Task.isCancelled else { return }
+                                        refreshWithCurrentKeyword()
+                                    }
+                                }
                                 .padding(.leading, 31)
                                 .padding(.trailing, 10)
 
@@ -66,44 +136,72 @@ struct BoardHomeView: View {
                         }
                         .padding(.top, 10)
 
-                        ForEach(Array(posts.enumerated()), id: \.offset) { _, p in
-                            let post = BoardPostModel(
-                                title: p.title,
-                                subtitle: p.preview,
-                                body: p.preview,
-                                likeCount: p.like
-                            )
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.custom("Pretendard-Medium", size: 12))
+                                .foregroundColor(.red)
+                                .padding(.horizontal, 31)
+                                .padding(.top, 16)
+                        }
 
-                            NavigationLink {
-                                BoardDetailView(post: post)
-                            } label: {
-                                BoardPostCard(
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(posts.enumerated()), id: \.offset) { idx, p in
+                                let post = BoardPostModel(
+                                    id: p.id,
                                     title: p.title,
-                                    preview: p.preview,
-                                    likeCount: p.like,
-                                    commentCount: p.comment,
-                                    thumbnail: p.imageName == nil ? nil : Image(p.imageName!),
-                                    onTapReport: {
-                                        reportReason = "개인정보 노출"
-                                        reportDetail = ""
-                                        isReportModalPresented = true
-                                    }
+                                    subtitle: previewText(p.content),
+                                    body: p.content,
+                                    likeCount: p.likeCount
                                 )
+
+                                NavigationLink {
+                                    BoardDetailView(post: post)
+                                } label: {
+                                    BoardPostCard(
+                                        title: p.title,
+                                        preview: previewText(p.content),
+                                        likeCount: p.likeCount,
+                                        commentCount: p.commentCount,
+                                        thumbnail: nil,
+                                        onTapReport: {
+                                            reportReason = "개인정보 노출"
+                                            reportDetail = ""
+                                            isReportModalPresented = true
+                                        }
+                                    )
+                                }
+                                .padding(.horizontal, 31)
+                                .padding(.top, 32)
+                                .buttonStyle(.plain)
+                                .disabled(isReportModalPresented)
+                                .task {
+                               
+                                    if idx == posts.count - 1 {
+                                        await loadMore(gen: loadGen)
+                                    }
+                                }
                             }
-                            .padding(.horizontal, 31)
-                            .padding(.top, 32)
-                            .buttonStyle(.plain)
-                            .disabled(isReportModalPresented)
+
+                            if isLoading {
+                                ProgressView()
+                                    .padding(.top, 20)
+                                    .frame(maxWidth: .infinity)
+                            }
                         }
                     }
                     .padding(.bottom, 140)
                 }
+                }
+                .refreshable {
+                    loadFirstPage()
+                }
                 .ignoresSafeArea()
-                 
-                .buttonStyle(.plain)
-                .padding(.bottom, 17)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .disabled(isReportModalPresented)
+                .task {
+                   
+                    if posts.isEmpty && !isLoading {
+                        loadFirstPage()
+                    }
+                }
 
                 if isReportModalPresented {
 
@@ -134,16 +232,27 @@ struct BoardHomeView: View {
                     BoardFloatingPlusButton {
                         isWritingPresented = true
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 24)
                 }
             }
             .animation(.easeInOut(duration: 0.15), value: isReportModalPresented)
             .navigationDestination(isPresented: $isWritingPresented) {
                 BoardwritingView()
+                    .onDisappear {
+                      
+                        print("🔁 BoardwritingView dismissed -> refreshing list")
+                        DispatchQueue.main.async {
+                            loadFirstPage()
+                        }
+                    }
+            }
+            .onChange(of: isWritingPresented) { _, newValue in
+                print("적는 에러띠 = \(newValue)")
             }
         }
     }
-}
 
 private struct BoardFloatingPlusButton: View {
     let action: () -> Void
@@ -155,15 +264,9 @@ private struct BoardFloatingPlusButton: View {
                     .fill(Color("Blue1"))
                     .frame(width: 62, height: 62)
                 Image("plus")
-                    
-                    
-
             }
-            .padding(.bottom, 20)
-            .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .buttonStyle(.plain)
-     
     }
 }
 

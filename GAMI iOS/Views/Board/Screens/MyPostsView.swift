@@ -75,7 +75,15 @@ struct MyPostsView: View {
                     return post.title.localizedCaseInsensitiveContains(q) || post.body.localizedCaseInsensitiveContains(q)
                 }) { p in
                     NavigationLink {
-                        BoardDetailView()
+                        BoardDetailView(
+                            post: BoardPostModel(
+                                id: Int(p.id) ?? -1,
+                                title: p.title,
+                                subtitle: p.body,
+                                body: p.body,
+                                likeCount: 0
+                            )
+                        )
                     } label: {
                         MyPostRowCard(
                             title: p.title,

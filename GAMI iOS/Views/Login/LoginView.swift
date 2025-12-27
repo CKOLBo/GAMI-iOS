@@ -229,7 +229,7 @@ private extension LoginView {
                 UserDefaults.standard.set(res.accessTokenExpiresIn, forKey: "accessTokenExpiresIn")
                 UserDefaults.standard.set(res.refreshTokenExpiresIn, forKey: "refreshTokenExpiresIn")
 
-                print("✅ saved accessToken =", storedAccessToken.isEmpty ? "EMPTY" : "(len: \(storedAccessToken.count))")
+                print(" 토큰 세이브 =", storedAccessToken.isEmpty ? "EMPTY" : "(len: \(storedAccessToken.count))")
 
                 await MainActor.run {
                     isLoggingIn = false

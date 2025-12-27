@@ -35,43 +35,44 @@ struct MentorFindView: View {
         }
     }
     var body: some View {
-        ScrollView{
-            VStack(alignment: .leading ,spacing: 0){
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("멘토찾기")
                     .font(.custom("Pretendard-Bold", size: 32))
-                    .padding(.top, 60)
-                MentorSearchBarView(searchText: $searchText)
-                    .padding(.top, 50)
-                
-            } .padding(.horizontal, 32)
+                    .padding(.top, 24)
 
-            
-            FindBar()
-                .padding(.top,24)
-                .padding(.horizontal, 31)
-            
-            let columns: [GridItem] = [
-                GridItem(.flexible(), spacing: 16),
-                GridItem(.flexible(), spacing: 16)
-            ]
-            
-            if filteredMentors.isEmpty {
-                MentorEmptyView()
-                    .padding(.horizontal, 31)
-                    .padding(.top, 40)
-            } else {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(filteredMentors) { mentor in
-                        MentorCardView(mentor: mentor) {
-                            Task {
-                                await applyMentor(mentorId: mentor.memberId)
+                MentorSearchBarView(searchText: $searchText)
+                    .padding(.top, 24)
+
+                FindBar()
+                    .padding(.top, 24)
+
+                let columns: [GridItem] = [
+                    GridItem(.flexible(), spacing: 16),
+                    GridItem(.flexible(), spacing: 16)
+                ]
+
+                if filteredMentors.isEmpty {
+                    MentorEmptyView()
+                        .padding(.top, 40)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(filteredMentors) { mentor in
+                            MentorCardView(mentor: mentor) {
+                                Task {
+                                    await applyMentor(mentorId: mentor.memberId)
+                                }
                             }
                         }
                     }
+                    .padding(.top, 18)
                 }
-                .padding(.top, 18)
-                .padding(.horizontal, 31)
+
+                // Bottom spacer so the last card/button is tappable above the TabBar
+                Color.clear
+                    .frame(height: 110)
             }
+            .padding(.horizontal, 31)
         }
         .task(id: accessToken) {
             print("✅ MentorFind accessToken =", UserDefaults.standard.string(forKey: "accessToken") ?? "nil")
@@ -83,8 +84,10 @@ struct MentorFindView: View {
             }
             await fetchMentors()
         }
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 20)
+        }
         .frame(maxWidth: .infinity,alignment: .topLeading)
-        .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)
         .alert("오류", isPresented: $showError) {
             Button("확인", role: .cancel) {}
@@ -100,43 +103,36 @@ struct MentorFindView: View {
     }
     
     func FindBar() -> some View{
-        ZStack(){
-            
+        ZStack(alignment: .bottomLeading) {
+            // Background card
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 6)
+
+            // Decorative image (keeps aspect ratio; never pushes layout)
             Image("ohing")
-            
-                .padding(.bottom, 52)
-                .padding(.top, 8)
-                .padding(.horizontal, 144)
-                .background(Color.white)
-               
-                .cornerRadius(12)
-                .shadow(
-                    color: .black.opacity(0.1),
-                    radius: 12,
-                    x: 0, y: 6
-                )
-            
-            VStack(alignment: .leading){
-                Text("당신에게 맞는 \n")
-                +
-                Text("멘토")
-                    .foregroundColor(Color("Blue1"))
-                +
-                Text("를 못 찾겠다면?")
-            }
-            .font(.custom("Pretendard-Bold", size: 16))
-            .padding(.top, 66)
-            .padding(.bottom, 16)
-            .padding(.leading, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            
-            
- 
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 120)
+                .opacity(1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.top, 12)
+                .padding(.trailing, 18)
 
-
+            // Text
+            (Text("당신에게 맞는\n")
+             + Text("멘토").foregroundColor(Color("Blue1"))
+             + Text("를 못 찾겠다면?"))
+                .font(.custom("Pretendard-Bold", size: 16))
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .minimumScaleFactor(0.9)
+                .padding(.leading, 16)
+                .padding(.bottom, 16)
+                .padding(.trailing, 140) // reserve space for the image on the right
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        
-        
+        .frame(height: 120)
     }
     
     @MainActor
@@ -146,7 +142,7 @@ struct MentorFindView: View {
         defer { isLoading = false }
 
         do {
-            mentors = try await service.fetchMentorsAll(page: 0, size: 10)
+            mentors = try await service.fetchMentorsAll(page: 0, size: 50)
         } catch {
             errorMessage = error.localizedDescription
             showError = true

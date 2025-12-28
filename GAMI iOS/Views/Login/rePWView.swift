@@ -54,7 +54,7 @@ struct rePWView: View {
 
            
             NavigationLink(isActive: $navigateToHome) {
-                HomeView()
+                TabbarView()
             } label: {
                 EmptyView()
             }

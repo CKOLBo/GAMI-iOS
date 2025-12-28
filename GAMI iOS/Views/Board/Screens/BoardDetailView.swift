@@ -9,13 +9,14 @@
 import SwiftUI
 
 struct BoardPostModel: Identifiable, Hashable {
-    let id: UUID
+
+    let id: Int
     let title: String
     let subtitle: String
     let body: String
     let likeCount: Int
 
-    init(id: UUID = UUID(), title: String, subtitle: String, body: String, likeCount: Int = 0) {
+    init(id: Int = -1, title: String, subtitle: String, body: String, likeCount: Int = 0) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -24,6 +25,7 @@ struct BoardPostModel: Identifiable, Hashable {
     }
 
     static let sample = BoardPostModel(
+        id: -1,
         title: "제목제목제목",
         subtitle: "부제목(미리보기)  내용이 들어갑니다.",
         body: "내용내용내용내용...",
@@ -33,6 +35,10 @@ struct BoardPostModel: Identifiable, Hashable {
 
 struct BoardDetailView: View {
     let post: BoardPostModel
+    private let postService = PostService()
+    @State private var detail: BoardPostDetailDTO? = nil
+    @State private var isDetailLoading: Bool = false
+    @State private var detailErrorMessage: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var commentText: String = ""
     @State private var comments: [String] = []
@@ -45,7 +51,7 @@ struct BoardDetailView: View {
     @State private var reportReason: String = "개인정보 노출"
     @State private var reportDetail: String = ""
 
-       private let reportReasons: [String] = [
+    private let reportReasons: [String] = [
         "광고·홍보·스팸",
         "욕설·비하·혐오 표현",
         "개인정보 노출",
@@ -59,9 +65,9 @@ struct BoardDetailView: View {
         self._likeCount = State(initialValue: post.likeCount)
     }
 
-    init() {
-        self.init(post: .sample)
-    }
+
+    private var displayTitle: String { detail?.title ?? post.title }
+    private var displayBody: String { detail?.content ?? post.body }
 
     var body: some View {
         ZStack {
@@ -89,7 +95,27 @@ struct BoardDetailView: View {
                 .padding(.leading, 32)
                 .padding(.top, 16)
 
-            Text(post.title)
+            if isDetailLoading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("불러오는 중...")
+                        .font(.custom("Pretendard-Medium", size: 12))
+                        .foregroundColor(Color("Gray3"))
+                }
+                .padding(.leading, 32)
+                .padding(.top, 8)
+            }
+
+            if let detailErrorMessage {
+                Text(detailErrorMessage)
+                    .font(.custom("Pretendard-Medium", size: 12))
+                    .foregroundColor(.red)
+                    .padding(.leading, 32)
+                    .padding(.top, 8)
+                    .padding(.trailing, 32)
+            }
+
+            Text(displayTitle)
                 .font(.custom("Pretendard-Bold", size: 24))
                 .foregroundColor(Color("Gray1"))
                 .lineLimit(2)
@@ -116,7 +142,7 @@ struct BoardDetailView: View {
                     .padding(.top, 16)
             }
 
-            Text(post.body)
+            Text(displayBody)
                 .font(.custom("Pretendard-Medium", size: 14))
                 .foregroundColor(Color("Gray1"))
                 .padding(.leading, 32)
@@ -315,6 +341,27 @@ struct BoardDetailView: View {
                 )
                 .padding(.horizontal, 24)
                 .transition(.scale)
+            }
+        }
+        .task {
+       
+            guard detail == nil else { return }
+            print("🧩 BoardDetailView task postId=\(post.id)")
+            guard post.id > 0 else { return }
+
+            isDetailLoading = true
+            detailErrorMessage = nil
+            defer { isDetailLoading = false }
+
+            do {
+                print("API post 에러띠/\(post.id)")
+                let res = try await postService.fetchPostDetail(postId: post.id)
+                print("디테일 코드 에러러ㅓ=\(res.title) like=\(res.likeCount)")
+                detail = res
+              
+                likeCount = res.likeCount
+            } catch {
+                detailErrorMessage = "게시글을 불러오지 못했어요.\n\(error.localizedDescription)"
             }
         }
         .animation(.easeInOut(duration: 0.15), value: isReportModalPresented)

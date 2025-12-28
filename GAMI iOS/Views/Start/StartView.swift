@@ -34,7 +34,7 @@ struct StartView: View {
                 )
                 .padding(.top, 83)
                 .padding(.horizontal, 105)
-
+ 
             Spacer()
 
             NavigationLink {

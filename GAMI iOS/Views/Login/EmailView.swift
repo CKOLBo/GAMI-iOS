@@ -10,7 +10,7 @@ import SwiftUI
 struct EmailView: View {
     @Environment(\.dismiss) private var dismiss
 
-    // EmailVerifyView에서 요구하는 회원가입 컨텍스트(EmailView에서는 임시값으로 유지)
+   
     private let name: String = ""
     private let generation: Int = 0
     private let gender: String = "MALE"

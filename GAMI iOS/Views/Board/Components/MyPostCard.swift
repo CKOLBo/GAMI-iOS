@@ -13,6 +13,7 @@ struct MyPostCard: View {
     let preview: String
     let likeCount: Int
     let commentCount: Int
+    let onTapReport: (() -> Void)?
     let thumbnail: Image?
 
     init(
@@ -20,12 +21,14 @@ struct MyPostCard: View {
         preview: String,
         likeCount: Int = 0,
         commentCount: Int = 0,
+        onTapReport: (() -> Void)? = nil,
         thumbnail: Image? = nil
     ) {
         self.title = title
         self.preview = preview
         self.likeCount = likeCount
         self.commentCount = commentCount
+        self.onTapReport = onTapReport
         self.thumbnail = thumbnail
     }
 
@@ -74,7 +77,16 @@ struct MyPostCard: View {
                             .padding(.horizontal, 14)
                     }
 
-                    Image("report")
+                    if let onTapReport {
+                        Button {
+                            onTapReport()
+                        } label: {
+                            Image("report")
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Image("report")
+                    }
                 }
                 .padding(.top, 2)
             }

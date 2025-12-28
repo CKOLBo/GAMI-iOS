@@ -8,23 +8,133 @@
 import SwiftUI
 
 struct BoardPost: Identifiable {
-    let id = UUID()
+    let id: Int
     let title: String
     let content: String
     let likeCount: Int
     let commentCount: Int
 }
 
-struct HomeView: View{
+struct HomeProfileDTO: Decodable {
+    let memberId: Int
+    let name: String
+    let gender: String
+    let generation: Int
+    let major: String
+}
 
-    @State private var posts: [BoardPost] = [
-        .init(title: "제목제목김준표", content: "내용내용내용김준표내용", likeCount: 3, commentCount: 3),
-        .init(title: "제목제목김준표", content: "내용내용내용김준표내용", likeCount: 1, commentCount: 0),
-        .init(title: "제목제목김준표", content: "내용내용내용김준표내용", likeCount: 12, commentCount: 4)
-    ]
+struct BoardPostDTO: Decodable {
+    let id: Int
+    let title: String
+    let content: String
+    let likeCount: Int
+    let commentCount: Int
+    let memberId: Int
+    let createdAt: String
+    let updatedAt: String
+    let images: [String]
+}
+
+struct PostPageDTO: Decodable {
+    let content: [BoardPostDTO]
+    let totalElements: Int?
+    let totalPages: Int?
+    let number: Int?
+    let size: Int?
+    let last: Bool?
+    let first: Bool?
+    let empty: Bool?
+}
+
+@MainActor
+final class HomeViewModel: ObservableObject {
+    @Published var profileName: String = ""
+    @Published var profileGender: String = ""
+    @Published var profileGenerationText: String = ""
+    @Published var profileMajorText: String = ""
+
+    @Published var posts: [BoardPost] = []
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
+
+ 
+    private let baseURL = "https://port-0-gami-server-mj0rdvda8d11523e.sel3.cloudtype.app"
+
+    func load(accessToken: String) async {
+        guard !accessToken.isEmpty else {
+            self.errorMessage = "accessToken이 비어있습니다 (로그인 토큰 저장 확인 필요)"
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            async let p = fetchProfile(accessToken: accessToken)
+            async let b = fetchBoardPosts(accessToken: accessToken)
+            _ = try await (p, b)
+        } catch {
+            self.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func fetchProfile(accessToken: String) async throws {
+      
+        let url = URL(string: baseURL + "/api/member")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        guard (200...299).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(domain: "HomeProfile", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Profile HTTP \(http.statusCode)\n\(body)"])
+        }
+
+        let decoded = try JSONDecoder().decode(HomeProfileDTO.self, from: data)
+        self.profileName = decoded.name
+        self.profileGender = decoded.gender
+        self.profileGenerationText = "\(decoded.generation)기"
+        self.profileMajorText = decoded.major
+    }
+
+    private func fetchBoardPosts(accessToken: String) async throws {
+  
+        let url = URL(string: baseURL + "/api/post?page=0&size=10&sort=createdAt,desc")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        guard (200...299).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(domain: "HomeBoard", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Board HTTP \(http.statusCode)\n\(body)"])
+        }
+
+        let decoded = try JSONDecoder().decode(PostPageDTO.self, from: data)
+        self.posts = decoded.content.map { dto in
+            BoardPost(
+                id: dto.id,
+                title: dto.title,
+                content: dto.content,
+                likeCount: dto.likeCount,
+                commentCount: dto.commentCount
+            )
+        }
+    }
+}
+
+struct HomeView: View {
+    @Binding var selection: TabbarView.Tab
+
+    @StateObject private var vm = HomeViewModel()
 
     var body: some View{
-        NavigationStack {
             ScrollView{
             VStack(alignment: .leading, spacing: 0){
                 Text("홈")
@@ -32,13 +142,20 @@ struct HomeView: View{
                         )
                     .padding(.top,60)
                    
+                if let err = vm.errorMessage {
+                    Text(err)
+                        .font(.custom("Pretendard-Medium", size: 12))
+                        .foregroundColor(.red)
+                        .padding(.top, 8)
+                }
+                
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("양은준")
+                    Text(vm.profileName.isEmpty ? "-" : vm.profileName)
                         .font(.custom("Pretendard-Bold", size: 16))
                         .foregroundColor(Color("Gray3"))
 
                     HStack(spacing: 8) {
-                        Text("남자")
+                        Text(vm.profileGender.isEmpty ? "-" : vm.profileGender)
                             .font(.custom("Pretendard-Bold", size: 10))
                             .foregroundColor(Color("Gray3"))
 
@@ -46,7 +163,7 @@ struct HomeView: View{
                             .frame(width: 1, height: 14)
                             .foregroundColor(Color("Gray2"))
 
-                        Text("9기")
+                        Text(vm.profileGenerationText.isEmpty ? "-" : vm.profileGenerationText)
                             .font(.custom("Pretendard-Bold", size: 10))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
@@ -54,7 +171,7 @@ struct HomeView: View{
                             .background(Color("Blue1"))
                             .cornerRadius(4)
 
-                        Text("FE")
+                        Text(vm.profileMajorText.isEmpty ? "-" : vm.profileMajorText)
                             .font(.custom("Pretendard-Bold", size: 10))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
@@ -77,8 +194,8 @@ struct HomeView: View{
                     .padding(.top, 28)
                 
                 
-                NavigationLink {
-                    MentorFindView()
+                Button {
+                    selection = .mentor
                 } label: {
                     MentorBar()
                 }
@@ -91,7 +208,7 @@ struct HomeView: View{
                     .padding(.top, 28)
                 
                 LazyVStack(spacing: 12) {
-                    ForEach(posts) { post in
+                    ForEach(vm.posts) { post in
                         NavigationLink {
                             BoardDetailView(
                                 post: BoardPostModel(
@@ -116,10 +233,13 @@ struct HomeView: View{
             .padding(.horizontal, 32)
 
             }
-        }
         .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .task {
+            let token = UserDefaults.standard.string(forKey: "accessToken") ?? ""
+            await vm.load(accessToken: token)
+        }
     }
     func WelcomeBar() -> some View{
         ZStack(alignment: .leading){
@@ -135,7 +255,7 @@ struct HomeView: View{
                 .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 6)
                 .frame(width: 340, height: 80)
             
-            Text("GAMI에 오신걸 환영합니다! 반가워요, 양은준님")
+            Text("GAMI에 오신걸 환영합니다! 반가워요, \(vm.profileName.isEmpty ? "-" : vm.profileName)님")
                 .padding(.vertical, 24)
                 .padding(.leading, 24)
                 .padding(.trailing, 134)
@@ -238,6 +358,6 @@ struct HomeView: View{
 
 
 
-#Preview{
-    HomeView()
+#Preview {
+    HomeView(selection: .constant(.home))
 }

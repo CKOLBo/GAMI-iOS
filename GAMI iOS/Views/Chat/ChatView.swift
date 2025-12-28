@@ -8,9 +8,11 @@
 import SwiftUI
 
 struct ChatItem: Identifiable, Hashable {
-    let id = UUID()
+    let id: Int
     let name: String
     let lastMessage: String
+    let major: String
+    let generation: Int
 }
 
 struct ChatRequestItem: Identifiable, Hashable {
@@ -18,14 +20,10 @@ struct ChatRequestItem: Identifiable, Hashable {
     let name: String
 }
 
-struct MentorRequestItem: Identifiable, Hashable {
-    let id = UUID()
-    let name: String
-}
-
 private struct MentorRequestModal: View {
     @Binding var isPresented: Bool
-    @Binding var items: [MentorRequestItem]
+    @Binding var items: [MentorApplyDTO]
+    let onAccept: (MentorApplyDTO) -> Void
 
     var body: some View {
         ZStack {
@@ -65,7 +63,7 @@ private struct MentorRequestModal: View {
                                     .frame(width: 24, height: 24)
                                     .padding(.trailing, 10)
 
-                                Text("\(item.name) 님께 요청이 보내졌어요.")
+                                Text("\((item.name ?? "알 수 없음")) 님께 요청이 왔어요.")
                                     .font(.custom("Pretendard-SemiBold", size: 10))
                                     .foregroundColor(Color("Gray3"))
                                     .lineLimit(1)
@@ -73,8 +71,19 @@ private struct MentorRequestModal: View {
                                 Spacer(minLength: 0)
 
                                 Button {
-                                    withAnimation(.easeInOut(duration: 0.15)) {
-                                        items.removeAll { $0.id == item.id }
+                                    Task {
+                                        do {
+                                            let service = MentorService()
+                                            try await service.patchApplyStatus(id: item.applyId, applyStatus: "ACCEPTED")
+                                            await MainActor.run {
+                                                onAccept(item)
+                                                withAnimation(.easeInOut(duration: 0.15)) {
+                                                    items.removeAll { $0.applyId == item.applyId }
+                                                }
+                                            }
+                                        } catch {
+                                            print(error)
+                                        }
                                     }
                                 } label: {
                                     Text("수락")
@@ -122,26 +131,19 @@ struct ChatView: View {
     }
 
     @State private var selectedTab: Tab = .chat
-    @State private var path: [String] = []
     @State private var searchText: String = ""
     @State private var requests: [ChatRequestItem] = [
         .init(name: "문강현"),
         .init(name: "김준표")
     ]
     @State private var isMentorModalPresented: Bool = false
-    @State private var mentorRequests: [MentorRequestItem] = [
-        .init(name: "양은준"),
-        .init(name: "양은준"),
-        .init(name: "양은준")
-    ]
+    @State private var mentorRequests: [MentorApplyDTO] = []
+    @State private var selectedChat: ChatItem? = nil
 
-    private let chats: [ChatItem] = [
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대"),
-        .init(name: "9기 문강현", lastMessage: "대리미화하데대대대대")
-    ]
+    @State private var chats: [ChatItem] = []
+
+    private let mentorService = MentorService()
+    private let chatService = ChatService()
 
     private var filteredChats: [ChatItem] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -150,6 +152,26 @@ struct ChatView: View {
             $0.name.localizedCaseInsensitiveContains(q) ||
             $0.lastMessage.localizedCaseInsensitiveContains(q)
         }
+    }
+    @MainActor
+    private func handleAccept(_ item: MentorApplyDTO) {
+        let rawName = (item.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let chatName = rawName.isEmpty ? "멘티" : rawName
+        if chats.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == chatName }) {
+            if let idx = chats.firstIndex(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == chatName }) {
+                let existing = chats.remove(at: idx)
+                chats.insert(existing, at: 0)
+            }
+            selectedTab = .chat
+            searchText = ""
+            return
+        }
+        chats.insert(
+            ChatItem(id: -Int(item.applyId), name: chatName, lastMessage: "멘토링이 시작되었어요.", major: "", generation: 0),
+            at: 0
+        )
+        selectedTab = .chat
+        searchText = ""
     }
 
     private var filteredRequests: [ChatRequestItem] {
@@ -164,8 +186,7 @@ struct ChatView: View {
 
     var body: some View {
         ZStack {
-            NavigationStack(path: $path) {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
                     HStack(spacing: 0) {
                         Text("채팅")
                             .font(.custom("Pretendard-Bold", size: selectedTab == .chat ? 32 : 24))
@@ -191,7 +212,19 @@ struct ChatView: View {
 
                         Image("Alarm")
                             .contentShape(Rectangle())
-                            .onTapGesture { isMentorModalPresented = true }
+                            .onTapGesture {
+                                isMentorModalPresented = true
+                                Task {
+                                    do {
+                                        let res = try await mentorService.fetchReceivedApplies()
+                                        await MainActor.run {
+                                            mentorRequests = res.filter { $0.applyStatus.uppercased() == "PENDING" }
+                                        }
+                                    } catch {
+                                        print(error)
+                                    }
+                                }
+                            }
                             .padding(.trailing, 31)
                     }
                     .padding(.top, 60)
@@ -302,7 +335,7 @@ struct ChatView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
-                                        path.append(chat.name)
+                                        selectedChat = chat
                                     }
                                     .listRowSeparator(.hidden)
                                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
@@ -323,15 +356,31 @@ struct ChatView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea()
-                .navigationDestination(for: String.self) { name in
-                    ChatRoomView(title: name)
+                .task {
+               
+                    do {
+                        let rooms = try await chatService.fetchRooms()
+                        await MainActor.run {
+                            self.chats = rooms.map { r in
+                                ChatItem(id: r.id, name: r.name, lastMessage: r.lastMessage, major: r.major, generation: r.generation)
+                            }
+                        }
+                    } catch {
+                        print("패치룸 에러 : ", error)
+                    }
+                }
+
+                if isMentorModalPresented {
+                    MentorRequestModal(
+                        isPresented: $isMentorModalPresented,
+                        items: $mentorRequests,
+                        onAccept: handleAccept
+                    )
                 }
             }
-
-            if isMentorModalPresented {
-                MentorRequestModal(isPresented: $isMentorModalPresented, items: $mentorRequests)
+            .navigationDestination(item: $selectedChat) { chat in
+                ChatRoomView(roomId: chat.id, title: chat.name)
             }
-        }
     }
 }
 
@@ -343,16 +392,16 @@ struct ChatView: View {
 #Preview("Mentor 신청 목록 모달") {
     struct MentorModalPreviewHost: View {
         @State private var isPresented: Bool = true
-        @State private var items: [MentorRequestItem] = [
-            .init(name: "양은준"),
-            .init(name: "문강현"),
-            .init(name: "김준표")
+        @State private var items: [MentorApplyDTO] = [
+            .init(applyId: 1, menteeId: 0, mentorId: 0, name: "양은준", applyStatus: "PENDING", createdAt: ""),
+            .init(applyId: 2, menteeId: 0, mentorId: 0, name: "문강현", applyStatus: "PENDING", createdAt: ""),
+            .init(applyId: 3, menteeId: 0, mentorId: 0, name: "김준표", applyStatus: "PENDING", createdAt: "")
         ]
 
         var body: some View {
             ZStack {
                 Color.white.ignoresSafeArea()
-                MentorRequestModal(isPresented: $isPresented, items: $items)
+                MentorRequestModal(isPresented: $isPresented, items: $items, onAccept: { _ in })
             }
         }
     }

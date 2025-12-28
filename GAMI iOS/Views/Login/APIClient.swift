@@ -9,6 +9,7 @@ import Foundation
 
 
 
+
 enum HTTPMethod: String {
     case get = "GET"
     case post = "POST"
@@ -102,6 +103,44 @@ final class APIClient {
 
     func request<T: Decodable>(_ endpoint: Endpoint, as type: T.Type = T.self) async throws -> T {
         let request = try makeRequest(endpoint)
+        #if DEBUG
+        print("➡️ REQUEST \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "nil")")
+        if let bodyData = request.httpBody, let bodyString = String(data: bodyData, encoding: .utf8) {
+            print("➡️ REQUEST BODY = \(bodyString)")
+        }
+        #endif
+        let (data, response) = try await session.data(for: request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        #if DEBUG
+        print("⬅️ RESPONSE status=\(http.statusCode) bytes=\(data.count)")
+        #endif
+
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            let body = String(data: data, encoding: .utf8)
+            print("❌ HTTP \(http.statusCode) | body=\(body ?? "<non-utf8 or empty>")")
+            #endif
+            throw APIError.httpStatus(http.statusCode, data)
+        }
+
+        do {
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            #if DEBUG
+            let raw = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("❌ DECODING FAILED: \(error) | raw=\(raw)")
+            #endif
+            throw APIError.decoding(error)
+        }
+    }
+
+    func requestNoBody(_ endpoint: Endpoint) async throws {
+        let request = try makeRequest(endpoint)
         let (data, response) = try await session.data(for: request)
 
         guard let http = response as? HTTPURLResponse else {
@@ -111,27 +150,7 @@ final class APIClient {
         guard (200...299).contains(http.statusCode) else {
             throw APIError.httpStatus(http.statusCode, data)
         }
-
-        do {
-            let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            throw APIError.decoding(error)
-        }
-    }
-
-    func requestNoBody(_ endpoint: Endpoint) async throws {
-        let request = try makeRequest(endpoint)
-        let (_, response) = try await session.data(for: request)
-
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-
-        guard (200...299).contains(http.statusCode) else {
-            throw APIError.httpStatus(http.statusCode, nil)
-        }
+     
     }
 
     private func makeRequest(_ endpoint: Endpoint) throws -> URLRequest {
@@ -153,16 +172,215 @@ final class APIClient {
         request.httpMethod = endpoint.method.rawValue
         request.httpBody = endpoint.body
 
-    
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
- 
+       
+        if request.value(forHTTPHeaderField: "Authorization") == nil,
+           let token = UserDefaults.standard.string(forKey: "accessToken"),
+           !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
         endpoint.headers.forEach { key, value in
             request.setValue(value, forHTTPHeaderField: key)
         }
 
         return request
+    }
+}
+
+
+
+
+struct BoardPostItemDTO: Decodable, Identifiable, Hashable {
+    let id: Int
+    let title: String
+    let content: String
+    let likeCount: Int
+    let commentCount: Int
+    let memberId: Int
+    let createdAt: String
+    let updatedAt: String
+    let images: [String]
+}
+
+struct BoardPostListResponseDTO: Decodable {
+    let totalElements: Int
+    let totalPages: Int
+    let size: Int
+    let content: [BoardPostItemDTO]
+    let number: Int
+    let numberOfElements: Int
+    let last: Bool
+    let first: Bool
+    let empty: Bool
+
+    let sort: SortDTO?
+    let pageable: PageableDTO?
+
+    struct SortDTO: Decodable {
+        let empty: Bool?
+        let unsorted: Bool?
+        let sorted: Bool?
+    }
+
+    struct PageableDTO: Decodable {
+        let offset: Int?
+        let unpaged: Bool?
+        let paged: Bool?
+        let pageNumber: Int?
+        let pageSize: Int?
+        let sort: SortDTO?
+    }
+}
+
+
+typealias BoardPostDetailDTO = BoardPostItemDTO
+
+
+struct PostImageUploadDTO: Encodable, Hashable {
+    let imageUrl: String
+    let sequence: Int
+}
+
+
+struct PostCreateRequestDTO: Encodable {
+    let title: String
+    let content: String
+    let images: [PostImageUploadDTO]
+}
+
+
+struct PostUpdateRequestDTO: Encodable {
+    let title: String
+    let content: String
+    let images: [PostImageUploadDTO]
+}
+
+
+struct PostSummaryResponseDTO: Decodable {
+    let postId: Int
+    let summary: String
+}
+
+
+
+enum PostEndpoint: Endpoint {
+    case list(keyword: String?, page: Int, size: Int, sort: String)
+    case create(PostCreateRequestDTO)
+    case detail(postId: Int)
+    case delete(postId: Int)
+    case update(postId: Int, PostUpdateRequestDTO)
+    case summary(postId: Int)
+
+    var method: HTTPMethod {
+        switch self {
+        case .list, .detail, .summary:
+            return .get
+        case .create:
+            return .post
+        case .update:
+            return .patch
+        case .delete:
+            return .delete
+        }
+    }
+
+    var path: String {
+        switch self {
+        case .list:
+            return "/api/post"
+        case .create:
+            return "/api/post"
+        case let .detail(postId):
+            return "/api/post/\(postId)"
+        case let .delete(postId):
+            return "/api/post/\(postId)"
+        case let .update(postId, _):
+            return "/api/post/\(postId)"
+        case let .summary(postId):
+            return "/api/post/summary/\(postId)"
+        }
+    }
+
+    var queryItems: [URLQueryItem] {
+        switch self {
+        case let .list(keyword, page, size, sort):
+            var items: [URLQueryItem] = [
+                URLQueryItem(name: "page", value: String(page)),
+                URLQueryItem(name: "size", value: String(size)),
+                URLQueryItem(name: "sort", value: sort)
+            ]
+            if let keyword, !keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                items.append(URLQueryItem(name: "keyword", value: keyword))
+            }
+            return items
+        default:
+            return []
+        }
+    }
+
+    var headers: [String : String] {
+      
+        return [:]
+    }
+
+    var body: Data? {
+        switch self {
+        case let .create(dto):
+            return try? JSONEncoder().encode(dto)
+        case let .update(_, dto):
+            return try? JSONEncoder().encode(dto)
+        default:
+            return nil
+        }
+    }
+}
+
+
+
+final class PostService {
+    private let client: APIClient
+
+    init(client: APIClient = .shared) {
+        self.client = client
+    }
+
+    
+    func fetchPostList(keyword: String? = nil, page: Int = 0, size: Int = 10, sort: String = "createdAt,desc") async throws -> BoardPostListResponseDTO {
+        let endpoint = PostEndpoint.list(keyword: keyword, page: page, size: size, sort: sort)
+        return try await client.request(endpoint, as: BoardPostListResponseDTO.self)
+    }
+
+
+    func fetchPostDetail(postId: Int) async throws -> BoardPostDetailDTO {
+        let endpoint = PostEndpoint.detail(postId: postId)
+        return try await client.request(endpoint, as: BoardPostDetailDTO.self)
+    }
+
+
+    func createPost(title: String, content: String, images: [PostImageUploadDTO] = []) async throws -> Int {
+        let dto = PostCreateRequestDTO(title: title, content: content, images: images)
+        let endpoint = PostEndpoint.create(dto)
+        return try await client.request(endpoint, as: Int.self)
+    }
+
+    func updatePost(postId: Int, title: String, content: String, images: [PostImageUploadDTO] = []) async throws {
+        let dto = PostUpdateRequestDTO(title: title, content: content, images: images)
+        let endpoint = PostEndpoint.update(postId: postId, dto)
+        try await client.requestNoBody(endpoint)
+    }
+
+
+    func deletePost(postId: Int) async throws {
+        let endpoint = PostEndpoint.delete(postId: postId)
+        try await client.requestNoBody(endpoint)
+    }
+
+    func fetchPostSummary(postId: Int) async throws -> PostSummaryResponseDTO {
+        let endpoint = PostEndpoint.summary(postId: postId)
+        return try await client.request(endpoint, as: PostSummaryResponseDTO.self)
     }
 }
 
@@ -323,7 +541,19 @@ final class AuthService {
             body: body
         )
 
-        return try await client.request(endpoint, as: LoginResponseDTO.self)
+        let response = try await client.request(endpoint, as: LoginResponseDTO.self)
+
+   
+        UserDefaults.standard.set(response.accessToken, forKey: "accessToken")
+        UserDefaults.standard.set(response.refreshToken, forKey: "refreshToken")
+        UserDefaults.standard.set(response.accessTokenExpiresIn, forKey: "accessTokenExpiresIn")
+        UserDefaults.standard.set(response.refreshTokenExpiresIn, forKey: "refreshTokenExpiresIn")
+
+        #if DEBUG
+        print("로그인 연결ㄹ=\(response.accessToken.count) | refreshToken len=\(response.refreshToken.count)")
+        #endif
+
+        return response
     }
 
 
@@ -371,7 +601,19 @@ final class AuthService {
             body: nil
         )
 
-        return try await client.request(endpoint, as: ReissueResponseDTO.self)
+        let response = try await client.request(endpoint, as: ReissueResponseDTO.self)
+
+      
+        UserDefaults.standard.set(response.accessToken, forKey: "accessToken")
+        UserDefaults.standard.set(response.refreshToken, forKey: "refreshToken")
+        UserDefaults.standard.set(response.accessTokenExpiresIn, forKey: "accessTokenExpiresIn")
+        UserDefaults.standard.set(response.refreshTokenExpiresIn, forKey: "refreshTokenExpiresIn")
+
+        #if DEBUG
+        print("토큰 승인=\(response.accessToken.count) | refreshToken len=\(response.refreshToken.count)")
+        #endif
+
+        return response
     }
 
 
@@ -399,5 +641,10 @@ final class AuthService {
         )
 
         try await client.requestNoBody(endpoint)
+
+        
+        UserDefaults.standard.removeObject(forKey: "accessToken")
+        UserDefaults.standard.removeObject(forKey: "refreshToken")
+        UserDefaults.standard.synchronize()
     }
 }

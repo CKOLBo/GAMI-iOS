@@ -288,7 +288,6 @@ final class ChatSocketService: ObservableObject {
             fail("\(msg)\n\(frame.body ?? "")")
 
         default:
-        )
             break
         }
     }

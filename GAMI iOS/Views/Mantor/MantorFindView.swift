@@ -215,9 +215,7 @@ struct MentorFindView: View {
 
             // Empty state
             VStack(spacing: 0) {
-                Image(systemName: "person.fill.questionmark")
-                    .font(.system(size: 70))
-                    .foregroundColor(Color("Gray3"))
+                Image("ohing")
                     .padding(.top, 52)
 
                 Text("당신에게 맞는 멘토를 추천해드릴게요.\n아래 버튼을 눌러 시작해보세요.")
@@ -300,9 +298,7 @@ struct MentorFindView: View {
                     .fill(Color("Gray4"))
                     .frame(width: 38, height: 38)
                     .overlay(
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(Color("Gray2"))
+                        Image(systemName: "ohing")
                     )
 
                 VStack(alignment: .leading, spacing: 4) {

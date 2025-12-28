@@ -134,6 +134,19 @@ struct HomeView: View {
 
     @StateObject private var vm = HomeViewModel()
 
+    private let postService = PostService()
+
+    // ✅ 좋아요 서버통신 중 중복 탭 방지
+    @State private var likeLoadingIDs: Set<Int> = []
+
+
+    // ✅ 앱 전역(공유) 좋아요 상태 저장소: 화면 재생성/탭 전환에도 유지
+    @StateObject private var likeStore = BoardLikeStore.shared
+
+    // ✅ NavigationLink로 감싸면 카드 내부 버튼(하트)이 안 눌릴 수 있어서, 선택 + destination 방식으로 이동
+    @State private var selectedBoardPost: BoardPost? = nil
+    @State private var isBoardDetailPresented: Bool = false
+
     var body: some View{
             ScrollView{
             VStack(alignment: .leading, spacing: 0){
@@ -209,19 +222,78 @@ struct HomeView: View {
                 
                 LazyVStack(spacing: 12) {
                     ForEach(vm.posts) { post in
-                        NavigationLink {
-                            BoardDetailView(
-                                post: BoardPostModel(
-                                    title: post.title,
-                                    subtitle: post.content,
-                                    body: post.content,
-                                    likeCount: post.likeCount
+                        let isLiked = likeStore.isLiked(post.id)
+                        let displayLikeCount = likeStore.likeCount(for: post.id, fallback: post.likeCount)
+
+                        BoardBar(
+                            post: post,
+                            isLiked: isLiked,
+                            displayLikeCount: displayLikeCount,
+                            onTapLike: {
+                                // ✅ 서버통신 + Notification으로 전체 화면 동기화
+                                guard !likeLoadingIDs.contains(post.id) else { return }
+                                likeLoadingIDs.insert(post.id)
+
+                                let currentlyLiked = likeStore.isLiked(post.id)
+                                let nextLiked = !currentlyLiked
+                                let nextCount = nextLiked
+                                    ? (displayLikeCount + 1)
+                                    : max(0, displayLikeCount - 1)
+
+                                // Optimistic UI (공유 스토어)
+                                likeStore.apply(postId: post.id, isLiked: nextLiked, likeCount: nextCount)
+
+                                // ✅ 다른 화면(BoardHome/Detail)로 신호 쏘기
+                                NotificationCenter.default.post(
+                                    name: .boardLikeChanged,
+                                    object: nil,
+                                    userInfo: [
+                                        "postId": post.id,
+                                        "isLiked": nextLiked,
+                                        "likeCount": nextCount
+                                    ]
                                 )
-                            )
-                        } label: {
-                            BoardBar(post: post)
+
+                                Task {
+                                    defer {
+                                        Task { @MainActor in
+                                            likeLoadingIDs.remove(post.id)
+                                        }
+                                    }
+                                    do {
+                                        if nextLiked {
+                                            try await postService.likePost(postId: post.id)
+                                        } else {
+                                            try await postService.unlikePost(postId: post.id)
+                                        }
+                                    } catch {
+                                        // 실패면 롤백 + 알림
+                                        let rollbackLiked = currentlyLiked
+                                        let rollbackCount = displayLikeCount
+
+                                        await MainActor.run {
+                                            likeStore.apply(postId: post.id, isLiked: rollbackLiked, likeCount: rollbackCount)
+
+                                            NotificationCenter.default.post(
+                                                name: .boardLikeChanged,
+                                                object: nil,
+                                                userInfo: [
+                                                    "postId": post.id,
+                                                    "isLiked": rollbackLiked,
+                                                    "likeCount": rollbackCount
+                                                ]
+                                            )
+                                        }
+                                        print("❌ HomeView like/unlike failed:", error)
+                                    }
+                                }
+                            }
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            selectedBoardPost = post
+                            isBoardDetailPresented = true
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.top, 12)
@@ -239,6 +311,45 @@ struct HomeView: View {
         .task {
             let token = UserDefaults.standard.string(forKey: "accessToken") ?? ""
             await vm.load(accessToken: token)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .boardLikeChanged)) { note in
+            guard
+                let info = note.userInfo,
+                let postId = info["postId"] as? Int
+            else { return }
+
+            // ✅ 키 호환: isLiked(권장) / liked(기존)
+            let liked = (info["isLiked"] as? Bool) ?? (info["liked"] as? Bool) ?? false
+            let count = (info["likeCount"] as? Int) ?? 0
+
+            // ✅ 공유 스토어 갱신 (Home/BoardHome/Detail 공통)
+            likeStore.apply(postId: postId, isLiked: liked, likeCount: count)
+
+            // ✅ HomeViewModel posts도 같이 갱신 (다른 화면 갔다 와도 유지)
+            if let idx = vm.posts.firstIndex(where: { $0.id == postId }) {
+                let p = vm.posts[idx]
+                vm.posts[idx] = BoardPost(
+                    id: p.id,
+                    title: p.title,
+                    content: p.content,
+                    likeCount: count,
+                    commentCount: p.commentCount
+                )
+            }
+        }
+        .navigationDestination(isPresented: $isBoardDetailPresented) {
+            if let p = selectedBoardPost {
+                BoardDetailView(
+                    post: BoardPostModel(
+                        id: p.id,
+                        title: p.title,
+                        subtitle: p.content,
+                        body: p.content,
+                        likeCount: likeStore.likeCount(for: p.id, fallback: p.likeCount),
+                        imageURLs: []
+                    )
+                )
+            }
         }
     }
     func WelcomeBar() -> some View{
@@ -305,7 +416,7 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
     }
     
-    func BoardBar(post: BoardPost) -> some View{
+    func BoardBar(post: BoardPost, isLiked: Bool, displayLikeCount: Int, onTapLike: @escaping () -> Void) -> some View{
         ZStack(){
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
@@ -331,13 +442,20 @@ struct HomeView: View {
                 .padding(.top, 10)
                 .padding(.leading, 16)
 
-                HStack(spacing : 0){
-                    Image("Hart")
-                        .padding(.leading, 16)
-                        .padding(.top, 15)
-                        .padding(.bottom, 15)
+                HStack(spacing: 0) {
+                    Button {
+                        onTapLike()
+                    } label: {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .font(.system(size: 16))
+                            .foregroundColor(isLiked ? .red : Color("Gray1"))
+                            .padding(.leading, 16)
+                            .padding(.top, 15)
+                            .padding(.bottom, 15)
+                    }
+                    .buttonStyle(.plain)
 
-                    Text("\(post.likeCount)")
+                    Text("\(displayLikeCount)")
                         .font(.custom("Pretendard-Regular", size: 12))
                         .foregroundColor(Color("Gray1"))
                         .padding(.horizontal, 14)
@@ -361,3 +479,5 @@ struct HomeView: View {
 #Preview {
     HomeView(selection: .constant(.home))
 }
+
+

@@ -6,16 +6,44 @@
 //
 
 
+
 import SwiftUI
 
+// MARK: - Home mutable post model (DTO is immutable: has `let` fields)
+private struct HomePost: Identifiable, Hashable {
+    let id: Int
+    let title: String
+    let content: String
+    let commentCount: Int
+    let images: [String]
+
+    var likeCount: Int
+    var liked: Bool
+
+    init(dto: BoardPostItemDTO) {
+        self.id = dto.id
+        self.title = dto.title
+        self.content = dto.content
+        self.commentCount = dto.commentCount
+        self.images = dto.images
+        self.likeCount = dto.likeCount
+        // 서버 DTO에 liked가 없을 수도 있어서 기본값 false
+        self.liked = (Mirror(reflecting: dto).children.first(where: { $0.label == "liked" })?.value as? Bool) ?? false
+    }
+}
+
 struct BoardHomeView: View {
-    @State private var posts: [BoardPostItemDTO] = []
+    @State private var posts: [HomePost] = []
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
 
     @State private var page: Int = 0
     @State private var hasMore: Bool = true
     @State private var loadGen: Int = 0
+
+    // ✅ HomeView와 공유되는 좋아요 상태 저장소
+    @StateObject private var likeStore = BoardLikeStore.shared
+
 
     private let postService = PostService()
     @State private var searchText: String = ""
@@ -40,6 +68,18 @@ struct BoardHomeView: View {
         return String(trimmed.prefix(60)) + "…"
     }
 
+    // MARK: - Like Sync Helper
+    private func applyLikeChange(postId: Int, liked: Bool, likeCount: Int) {
+        // ✅ 공유 스토어 갱신 (Home / BoardHome / Detail 공통)
+        likeStore.apply(postId: postId, isLiked: liked, likeCount: likeCount)
+
+        // ✅ BoardHomeView 리스트 데이터 갱신
+        if let i = posts.firstIndex(where: { $0.id == postId }) {
+            posts[i].likeCount = likeCount
+            posts[i].liked = liked
+        }
+    }
+
     private func loadFirstPage() {
         loadGen += 1
         let gen = loadGen
@@ -50,16 +90,13 @@ struct BoardHomeView: View {
         posts = []
         errorMessage = nil
 
-    
-        isLoading = false
-
         Task { await loadMore(gen: gen) }
     }
 
     @MainActor
     private func loadMore(gen: Int) async {
         print("홈뷰 불러오기 실패 gen=\(gen) loadGen=\(loadGen) page=\(page) hasMore=\(hasMore) isLoading=\(isLoading) keyword='\(searchText)'")
-      
+        if Task.isCancelled { return }
         guard gen == loadGen else { return }
         guard !isLoading, hasMore else { return }
 
@@ -77,14 +114,27 @@ struct BoardHomeView: View {
             )
             print("⬅️ RESPONSE posts=\(res.content.count) last=\(res.last) totalElements=\(res.totalElements) totalPages=\(res.totalPages)")
 
-          
             guard gen == loadGen else { return }
 
-            posts.append(contentsOf: res.content)
+            let newPosts = res.content.map { HomePost(dto: $0) }
+            posts.append(contentsOf: newPosts)
+
+            // ✅ 이미 다른 화면에서 눌린 좋아요 상태/카운트가 있으면 스토어 값을 우선 반영
+            for p in newPosts {
+                let syncedLiked = likeStore.isLiked(p.id)
+                let syncedCount = likeStore.likeCount(for: p.id, fallback: p.likeCount)
+                applyLikeChange(postId: p.id, liked: syncedLiked, likeCount: syncedCount)
+            }
 
             hasMore = !res.last
             page += 1
         } catch {
+            // ✅ 화면 이동/스크롤/검색 디바운스 등으로 Task가 취소되면 CancellationError가 자주 발생함
+            // 이건 실패가 아니라 정상적인 취소라서 에러로 보여주지 않음
+            if Task.isCancelled { return }
+            if error is CancellationError { return }
+            if String(describing: error).contains("CancellationError") { return }
+
             errorMessage = "게시글을 불러오지 못했어요.\n\(error.localizedDescription)"
         }
     }
@@ -146,23 +196,43 @@ struct BoardHomeView: View {
 
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(posts.enumerated()), id: \.offset) { idx, p in
-                                let post = BoardPostModel(
+                                let displayLiked = likeStore.isLiked(p.id)
+                                let displayLikeCount = likeStore.likeCount(for: p.id, fallback: p.likeCount)
+                                let postModel = BoardPostModel(
                                     id: p.id,
                                     title: p.title,
                                     subtitle: previewText(p.content),
                                     body: p.content,
-                                    likeCount: p.likeCount
+                                    likeCount: displayLikeCount,
+                                    imageURLs: p.images
                                 )
 
                                 NavigationLink {
-                                    BoardDetailView(post: post)
+                                    BoardDetailView(post: postModel)
                                 } label: {
                                     BoardPostCard(
+                                        postId: p.id,
                                         title: p.title,
                                         preview: previewText(p.content),
-                                        likeCount: p.likeCount,
+                                        likeCount: displayLikeCount,
                                         commentCount: p.commentCount,
                                         thumbnail: nil,
+                                        thumbnailURL: p.images.first,
+                                        onTapLike: { liked, newCount in
+                                            // ✅ 홈 리스트 + 공유 스토어 갱신
+                                            applyLikeChange(postId: p.id, liked: liked, likeCount: newCount)
+
+                                            // ✅ 다른 화면(Home/Detail)에도 동기화 신호
+                                            NotificationCenter.default.post(
+                                                name: .boardLikeChanged,
+                                                object: nil,
+                                                userInfo: [
+                                                    "postId": p.id,
+                                                    "isLiked": liked,
+                                                    "likeCount": newCount
+                                                ]
+                                            )
+                                        },
                                         onTapReport: {
                                             reportReason = "개인정보 노출"
                                             reportDetail = ""
@@ -170,12 +240,11 @@ struct BoardHomeView: View {
                                         }
                                     )
                                 }
+                                .buttonStyle(.plain)
                                 .padding(.horizontal, 31)
                                 .padding(.top, 32)
-                                .buttonStyle(.plain)
                                 .disabled(isReportModalPresented)
                                 .task {
-                               
                                     if idx == posts.count - 1 {
                                         await loadMore(gen: loadGen)
                                     }
@@ -189,22 +258,22 @@ struct BoardHomeView: View {
                             }
                         }
                     }
+                    // ✅ 탭바 + 플로팅 버튼 공간 확보 (너무 과하면 줄여도 됨)
                     .padding(.bottom, 140)
                 }
-                }
+                // ✅ pull-to-refresh는 ScrollView에 적용
                 .refreshable {
                     loadFirstPage()
                 }
-                .ignoresSafeArea()
+                // ✅ 상단은 안전영역 무시 (타이틀이 위로 올라가도록)
+                .ignoresSafeArea(edges: .top)
                 .task {
-                   
                     if posts.isEmpty && !isLoading {
                         loadFirstPage()
                     }
                 }
 
                 if isReportModalPresented {
-
                     Color.black.opacity(0.4)
                         .ignoresSafeArea()
 
@@ -218,7 +287,6 @@ struct BoardHomeView: View {
                             reportDetail = ""
                         },
                         onSubmit: {
-
                             isReportModalPresented = false
                             reportReason = "개인정보 노출"
                             reportDetail = ""
@@ -228,6 +296,7 @@ struct BoardHomeView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .transition(.scale)
                 }
+
                 if !isReportModalPresented {
                     BoardFloatingPlusButton {
                         isWritingPresented = true
@@ -241,7 +310,6 @@ struct BoardHomeView: View {
             .navigationDestination(isPresented: $isWritingPresented) {
                 BoardwritingView()
                     .onDisappear {
-                      
                         print("🔁 BoardwritingView dismissed -> refreshing list")
                         DispatchQueue.main.async {
                             loadFirstPage()
@@ -251,8 +319,19 @@ struct BoardHomeView: View {
             .onChange(of: isWritingPresented) { _, newValue in
                 print("적는 에러띠 = \(newValue)")
             }
+            .onReceive(NotificationCenter.default.publisher(for: .boardLikeChanged)) { note in
+                guard let info = note.userInfo else { return }
+                guard let postId = info["postId"] as? Int else { return }
+
+                // ✅ 키 호환: isLiked(권장) / liked(기존)
+                let liked = (info["isLiked"] as? Bool) ?? (info["liked"] as? Bool) ?? false
+                let likeCount = (info["likeCount"] as? Int) ?? 0
+
+                applyLikeChange(postId: postId, liked: liked, likeCount: likeCount)
+            }
         }
     }
+}
 
 private struct BoardFloatingPlusButton: View {
     let action: () -> Void

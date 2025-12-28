@@ -10,11 +10,57 @@ import SwiftUI
 struct MyPageView: View {
 
 
-    private let userName: String = "양은준"
-    private let userGender: String = "남자"
-    private let userGrade: String = "9기"
+    @StateObject private var vm = MyPageViewModel()
 
     @State private var selectedMajor: String = "FE"
+    @State private var isMajorUpdating: Bool = false
+    @State private var majorUpdateError: String? = nil
+
+    // UI 칩 <-> 서버 enum 값 매핑
+    private let majorToServer: [String: String] = [
+        "FE": "FRONTEND",
+        "BE": "BACKEND",
+        "iOS": "IOS",
+        "Android": "ANDROID",
+        "Design": "DESIGN",
+        "DevOps": "DEVOPS",
+        "AI": "AI",
+        "IT Network": "IT_NETWORK",
+        "Flutter": "FLUTTER",
+        "Cyber Security": "CYBER_SECURITY",
+        "Game Development": "GAME_DEVELOPMENT",
+        "Cloud Computing": "CLOUD_COMPUTING",
+        "Mobile Robotics": "MOBILE_ROBOTICS"
+    ]
+
+    private let serverToMajor: [String: String] = [
+        "FRONTEND": "FE",
+        "BACKEND": "BE",
+        "IOS": "iOS",
+        "ANDROID": "Android",
+        "DESIGN": "Design",
+        "DEVOPS": "DevOps",
+        "AI": "AI",
+        "IT_NETWORK": "IT Network",
+        "FLUTTER": "Flutter",
+        "CYBER_SECURITY": "Cyber Security",
+        "GAME_DEVELOPMENT": "Game Development",
+        "CLOUD_COMPUTING": "Cloud Computing",
+        "MOBILE_ROBOTICS": "Mobile Robotics"
+    ]
+
+    private var displayName: String { vm.profile?.name ?? "-" }
+    private var displayGender: String {
+        // 서버가 MALE/FEMALE 등으로 내려줄 수 있어서 UI용으로 변환
+        let g = vm.profile?.gender ?? "-"
+        if g.uppercased() == "MALE" { return "남자" }
+        if g.uppercased() == "FEMALE" { return "여자" }
+        return g
+    }
+    private var displayGrade: String {
+        if let gen = vm.profile?.generation { return "\(gen)기" }
+        return "-"
+    }
 
     private let majors: [String] = [
         "FE", "BE", "iOS", "Mobile Robotics",
@@ -39,12 +85,30 @@ struct MyPageView: View {
 
                
                     ProfileCardView(
-                        name: userName,
-                        gender: userGender,
-                        grade: userGrade
+                        name: displayName,
+                        gender: displayGender,
+                        grade: displayGrade,
+                        onLogout: {
+                            // ✅ 로그아웃: 토큰 제거 + 앱에 알림
+                            UserDefaults.standard.removeObject(forKey: "accessToken")
+                            UserDefaults.standard.removeObject(forKey: "refreshToken")
+                            UserDefaults.standard.removeObject(forKey: "memberId")
+                            NotificationCenter.default.post(
+                                name: Notification.Name("didLogout"),
+                                object: nil
+                            )
+                        }
                     )
                     .padding(.top, 28)
                     .padding(.horizontal, 24)
+
+                    if let err = vm.errorMessage {
+                        Text(err)
+                            .font(.custom("Pretendard-Medium", size: 12))
+                            .foregroundColor(.red)
+                            .padding(.top, 12)
+                            .padding(.horizontal, 24)
+                    }
 
              
                     Text("전공")
@@ -55,11 +119,36 @@ struct MyPageView: View {
 
                     MajorChipGrid(
                         items: majors,
-                        selected: $selectedMajor
+                        selected: $selectedMajor,
+                        onSelect: { tapped in
+                            majorUpdateError = nil
+                            guard let serverValue = majorToServer[tapped] else {
+                                majorUpdateError = "전공 매핑이 없어요: \(tapped)"
+                                return
+                            }
+                            guard !isMajorUpdating else { return }
+
+                            isMajorUpdating = true
+                            Task { @MainActor in
+                                await vm.changeMajor(serverValue)
+                                isMajorUpdating = false
+                                // 서버에서 내려온 값으로 UI도 다시 맞춤
+                                if let serverMajor = vm.profile?.major {
+                                    selectedMajor = serverToMajor[serverMajor] ?? selectedMajor
+                                }
+                            }
+                        }
                     )
                     .padding(.top, 20)
                     .padding(.horizontal, 39)
                    
+                    if let majorUpdateError {
+                        Text(majorUpdateError)
+                            .font(.custom("Pretendard-Medium", size: 12))
+                            .foregroundColor(.red)
+                            .padding(.top, 10)
+                            .padding(.horizontal, 39)
+                    }
 
                    
                     
@@ -68,6 +157,12 @@ struct MyPageView: View {
         }
         .ignoresSafeArea()
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task {
+            await vm.load()
+            if let serverMajor = vm.profile?.major {
+                selectedMajor = serverToMajor[serverMajor] ?? selectedMajor
+            }
+        }
     }
 }
 
@@ -76,6 +171,7 @@ private struct ProfileCardView: View {
     let name: String
     let gender: String
     let grade: String
+    let onLogout: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -122,6 +218,19 @@ private struct ProfileCardView: View {
             .padding(.leading, 16)
 
             Spacer(minLength: 0)
+
+            Button {
+                onLogout()
+            } label: {
+                Text("로그아웃")
+                    .font(.custom("Pretendard-Bold", size: 12))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color("Blue1"))
+                    .cornerRadius(18)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 18)
@@ -137,6 +246,7 @@ private struct ProfileCardView: View {
 private struct MajorChipGrid: View {
     let items: [String]
     @Binding var selected: String
+    let onSelect: (String) -> Void
 
     private let itemSpacing: CGFloat = 14
 
@@ -149,6 +259,7 @@ private struct MajorChipGrid: View {
                 )
                 .onTapGesture {
                     selected = item
+                    onSelect(item)
                 }
             }
         }
@@ -261,6 +372,41 @@ private extension Color {
         )
     }
 }
+
+
+// MARK: - MyPage API ViewModel
+@MainActor
+final class MyPageViewModel: ObservableObject {
+    @Published var profile: MyProfileDTO? = nil
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
+
+    private let memberService = MemberService()
+
+    func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            profile = try await memberService.fetchMyProfile()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func changeMajor(_ major: String) async {
+        errorMessage = nil
+        do {
+            try await memberService.updateMajor(major)
+            // 전공 수정 후 내 프로필 다시 조회
+            profile = try await memberService.fetchMyProfile()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
 
 #Preview {
     MyPageView()

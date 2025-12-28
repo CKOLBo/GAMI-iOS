@@ -5,6 +5,11 @@
 //  Created by 김준표 on 12/10/25.
 //
 
+
+extension Notification.Name {
+    static let boardCommentCountChanged = Notification.Name("boardCommentCountChanged")
+}
+
 import SwiftUI
 
 struct BoardPost: Identifiable {
@@ -138,6 +143,9 @@ struct HomeView: View {
 
     // ✅ 좋아요 서버통신 중 중복 탭 방지
     @State private var likeLoadingIDs: Set<Int> = []
+
+    // ✅ 댓글 수 동기화 (Detail에서 변경되면 Home에서도 즉시 반영)
+    // (중복 방지 로직이 필요해지면 여기서 Set으로 확장)
 
 
     // ✅ 앱 전역(공유) 좋아요 상태 저장소: 화면 재생성/탭 전환에도 유지
@@ -334,6 +342,24 @@ struct HomeView: View {
                     content: p.content,
                     likeCount: count,
                     commentCount: p.commentCount
+                )
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .boardCommentCountChanged)) { note in
+            guard
+                let info = note.userInfo,
+                let postId = info["postId"] as? Int,
+                let commentCount = info["commentCount"] as? Int
+            else { return }
+
+            if let idx = vm.posts.firstIndex(where: { $0.id == postId }) {
+                let p = vm.posts[idx]
+                vm.posts[idx] = BoardPost(
+                    id: p.id,
+                    title: p.title,
+                    content: p.content,
+                    likeCount: p.likeCount,
+                    commentCount: commentCount
                 )
             }
         }

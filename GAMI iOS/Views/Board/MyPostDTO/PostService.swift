@@ -65,6 +65,7 @@ final class PostService {
         try await client.requestNoBody(endpoint)
     }
 
+    // ✅ 게시글 요약 조회
     func fetchPostSummary(postId: Int) async throws -> PostSummaryResponseDTO {
         let endpoint = PostAPI.Summary(postId: postId)
         return try await client.request(endpoint, as: PostSummaryResponseDTO.self)

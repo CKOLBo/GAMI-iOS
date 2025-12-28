@@ -6,7 +6,94 @@
 //
 
 
+
+
 import SwiftUI
+import UIKit
+
+
+// MARK: - Comment DTO / API (Board)
+
+private struct BoardCommentResponseDTO: Decodable, Identifiable, Hashable {
+    let postId: Int
+    let commentId: Int
+    let comment: String
+    let createdAt: String
+
+    var id: Int { commentId }
+}
+
+private struct BoardCreateCommentRequestDTO: Encodable {
+    let comment: String
+}
+
+private enum BoardCommentAPI: Endpoint {
+    case fetch(postId: Int)
+    case create(postId: Int, body: BoardCreateCommentRequestDTO)
+    case delete(commentId: Int)
+
+    var method: HTTPMethod {
+        switch self {
+        case .fetch:
+            return .get
+        case .create:
+            return .post
+        case .delete:
+            return .delete
+        }
+    }
+
+    var path: String {
+        switch self {
+        case .fetch(let postId):
+            return "/api/post/\(postId)/comment"
+        case .create(let postId, _):
+            return "/api/post/\(postId)/comment"
+        case .delete(let commentId):
+            return "/api/post/comment/\(commentId)"
+        }
+    }
+
+    var queryItems: [URLQueryItem] { [] }
+
+    var headers: [String : String] {
+        var h: [String: String] = [
+            "Content-Type": "application/json"
+        ]
+        if let token = UserDefaults.standard.string(forKey: "accessToken"), !token.isEmpty {
+            h["Authorization"] = "Bearer \(token)"
+        }
+        return h
+    }
+
+    var body: Data? {
+        switch self {
+        case .create(_, let body):
+            return try? JSONEncoder().encode(body)
+        default:
+            return nil
+        }
+    }
+}
+
+private struct BoardEmptyResponseDTO: Decodable {}
+
+private final class BoardCommentService {
+    private let client = APIClient.shared
+
+    func fetch(postId: Int) async throws -> [BoardCommentResponseDTO] {
+        try await client.request(BoardCommentAPI.fetch(postId: postId))
+    }
+
+    func create(postId: Int, comment: String) async throws -> BoardCommentResponseDTO {
+        let body = BoardCreateCommentRequestDTO(comment: comment)
+        return try await client.request(BoardCommentAPI.create(postId: postId, body: body))
+    }
+
+    func delete(commentId: Int) async throws {
+        let _: BoardEmptyResponseDTO = try await client.request(BoardCommentAPI.delete(commentId: commentId))
+    }
+}
 
 struct BoardPostModel: Identifiable, Hashable {
 
@@ -46,13 +133,21 @@ struct BoardDetailView: View {
     @State private var detailErrorMessage: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var commentText: String = ""
-    @State private var comments: [String] = []
+    private let commentService = BoardCommentService()
+    @State private var comments: [BoardCommentResponseDTO] = []
+    @State private var isCommentsLoading: Bool = false
+    @State private var commentErrorMessage: String? = nil
     @State private var likeCount: Int
     @State private var isLiked: Bool = false
     @State private var isLikeLoading: Bool = false
     @State private var likeErrorMessage: String? = nil
     @FocusState private var isCommentFocused: Bool
 
+    // ✅ 재미나이 글 요약 (서버 요약)
+    @State private var isSummaryModalPresented: Bool = false
+    @State private var isSummaryLoading: Bool = false
+    @State private var summaryText: String = ""
+    @State private var summaryErrorMessage: String? = nil
     @State private var isReportModalPresented: Bool = false
     @State private var reportTargetComment: String? = nil
     @State private var reportReason: String = "개인정보 노출"
@@ -79,6 +174,90 @@ struct BoardDetailView: View {
 
     private var displayTitle: String { detail?.title ?? post.title }
     private var displayBody: String { detail?.content ?? post.body }
+
+    // MARK: - Summary
+
+    private func generateLocalSummary(from text: String) -> String {
+        let trimmed = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmed.isEmpty else { return "요약할 내용이 없어요." }
+
+        let separators = CharacterSet(charactersIn: ".!?。！？")
+        let pieces = trimmed
+            .components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        if pieces.isEmpty {
+            return String(trimmed.prefix(160)) + (trimmed.count > 160 ? "…" : "")
+        }
+
+        let takeCount = min(3, max(2, pieces.count >= 2 ? 2 : 1))
+        let joined = pieces.prefix(takeCount).joined(separator: ". ")
+
+        let maxLen = 220
+        if joined.count > maxLen {
+            return String(joined.prefix(maxLen)) + "…"
+        }
+        return joined + (joined.hasSuffix(".") ? "" : ".")
+    }
+
+    @MainActor
+    private func openSummary() {
+        guard post.id > 0 else {
+            summaryErrorMessage = "postId가 올바르지 않아요. (id=\(post.id))"
+            isSummaryModalPresented = true
+            return
+        }
+
+        summaryErrorMessage = nil
+        summaryText = ""
+        isSummaryModalPresented = true
+        isSummaryLoading = true
+
+        Task {
+            do {
+                let res = try await postService.fetchPostSummary(postId: post.id)
+                await MainActor.run {
+                    summaryText = res.summary
+                    isSummaryLoading = false
+                }
+            } catch {
+                let fallback = generateLocalSummary(from: displayBody)
+                await MainActor.run {
+                    summaryText = fallback
+
+                    if isHTTPStatus(error, 409) {
+                        // ✅ 서버에 요약이 아직 없을 때(정상 케이스)
+                        summaryErrorMessage = "아직 서버 요약이 없어서 로컬 요약으로 보여줘요."
+                    } else {
+                        // 그 외는 네트워크/서버 에러
+                        summaryErrorMessage = "서버 요약을 불러오지 못했어요. 로컬 요약으로 보여줄게요."
+                    }
+
+                    isSummaryLoading = false
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func closeSummary() {
+        isSummaryModalPresented = false
+        isSummaryLoading = false
+        summaryErrorMessage = nil
+    }
+
+    @MainActor
+    private func copySummaryToClipboard() {
+        let trimmed = summaryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        UIPasteboard.general.string = trimmed
+    }
 
     // MARK: - Images (best-effort extraction)
 
@@ -176,6 +355,19 @@ struct BoardDetailView: View {
                 "postId": post.id,
                 "isLiked": isLiked,
                 "likeCount": likeCount
+            ]
+        )
+    }
+
+    @MainActor
+    private func notifyCommentCountChanged() {
+        guard post.id > 0 else { return }
+        NotificationCenter.default.post(
+            name: .boardCommentCountChanged,
+            object: nil,
+            userInfo: [
+                "postId": post.id,
+                "commentCount": comments.count
             ]
         )
     }
@@ -415,6 +607,32 @@ struct BoardDetailView: View {
                 .contentShape(Rectangle())
                 .buttonStyle(.plain)
                 .padding(.top, 10)
+
+                Button {
+                    openSummary()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color("Gray1"))
+
+                        Text("요약")
+                            .font(.custom("Pretendard-Medium", size: 12))
+                            .foregroundColor(Color("Gray1"))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(Color("White1"))
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color("Gray4"), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 10)
             }
             
             
@@ -484,9 +702,26 @@ struct BoardDetailView: View {
                     Button {
                         let trimmed = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
-                        comments.append(trimmed)
+                        guard post.id > 0 else { return }
+
+                        commentErrorMessage = nil
+                        let sending = trimmed
                         commentText = ""
                         isCommentFocused = false
+
+                        Task {
+                            do {
+                                let created = try await commentService.create(postId: post.id, comment: sending)
+                                await MainActor.run {
+                                    comments.append(created)
+                                    notifyCommentCountChanged()
+                                }
+                            } catch {
+                                await MainActor.run {
+                                    commentErrorMessage = "댓글 작성에 실패했어요.\n\(error.localizedDescription)"
+                                }
+                            }
+                        }
                     } label: {
                         Text("댓글")
                             .font(.custom("Pretendard-SemiBold", size: 12))
@@ -504,10 +739,29 @@ struct BoardDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
+            
+            if isCommentsLoading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("댓글 불러오는 중...")
+                        .font(.custom("Pretendard-Medium", size: 12))
+                        .foregroundColor(Color("Gray3"))
+                }
+                .padding(.leading, 32)
+                .padding(.top, 10)
+            }
+
+            if let commentErrorMessage {
+                Text(commentErrorMessage)
+                    .font(.custom("Pretendard-Medium", size: 12))
+                    .foregroundColor(.red)
+                    .padding(.horizontal, 32)
+                    .padding(.top, 8)
+            }
 
             if !comments.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(comments.enumerated()), id: \.offset) { _, c in
+                    ForEach(comments) { c in
                         HStack(alignment: .top, spacing: 12) {
                             Image("profiles 1")
                                 .resizable()
@@ -519,12 +773,34 @@ struct BoardDetailView: View {
                                     .font(.custom("Pretendard-Bold", size: 12))
                                     .foregroundColor(Color("Gray1"))
 
-                                Text(c)
+                                Text(c.comment)
                                     .font(.custom("Pretendard-Medium", size: 12))
                                     .foregroundColor(Color("Gray3"))
                             }
 
                             Spacer(minLength: 0)
+
+                            Button {
+                                Task {
+                                    do {
+                                        try await commentService.delete(commentId: c.commentId)
+                                        await MainActor.run {
+                                            comments.removeAll { $0.commentId == c.commentId }
+                                            notifyCommentCountChanged()
+                                        }
+                                    } catch {
+                                        await MainActor.run {
+                                            commentErrorMessage = "댓글 삭제에 실패했어요.\n\(error.localizedDescription)"
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(Color("Gray3"))
+                                    .padding(8)
+                            }
+                            .buttonStyle(.plain)
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
@@ -542,6 +818,170 @@ struct BoardDetailView: View {
             }
             .padding(.bottom, 24)
 
+            }
+
+            if isSummaryModalPresented {
+                // Dim
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // Header
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(Color("Blue1").opacity(0.15))
+                                .frame(width: 34, height: 34)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(Color("Blue1"))
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("재미나이 요약")
+                                .font(.custom("Pretendard-Bold", size: 18))
+                                .foregroundColor(Color("Gray1"))
+
+                            Text("게시글 핵심만 뽑아드림")
+                                .font(.custom("Pretendard-Medium", size: 12))
+                                .foregroundColor(Color("Gray3"))
+                        }
+
+                        Spacer()
+
+                        Button {
+                            closeSummary()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(Color("Gray3"))
+                                .padding(10)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+
+                    // Body
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let summaryErrorMessage {
+                            HStack(spacing: 8) {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(Color("Gray3"))
+
+                                Text(summaryErrorMessage)
+                                    .font(.custom("Pretendard-Medium", size: 12))
+                                    .foregroundColor(Color("Gray3"))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color("Gray4").opacity(0.18))
+                            )
+                        }
+
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color("Gray4"), lineWidth: 1)
+                            )
+                            .overlay {
+                                if isSummaryLoading {
+                                    VStack(spacing: 10) {
+                                        ProgressView()
+                                        Text("요약 만드는 중...")
+                                            .font(.custom("Pretendard-Medium", size: 12))
+                                            .foregroundColor(Color("Gray3"))
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .padding(16)
+                                } else {
+                                    ScrollView {
+                                        Text(summaryText.isEmpty ? "요약 결과가 없어요." : summaryText)
+                                            .font(.custom("Pretendard-Medium", size: 14))
+                                            .foregroundColor(Color("Gray1"))
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(16)
+                                    }
+                                }
+                            }
+                            .frame(height: 190)
+
+                        // Buttons
+                        HStack(spacing: 10) {
+                            Button {
+                                openSummary()
+                            } label: {
+                                Text("다시 요약")
+                                    .font(.custom("Pretendard-Bold", size: 14))
+                                    .foregroundColor(Color("Gray1"))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color.white)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 14)
+                                                    .stroke(Color("Gray4"), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isSummaryLoading)
+                            .opacity(isSummaryLoading ? 0.6 : 1)
+
+                            Button {
+                                copySummaryToClipboard()
+                            } label: {
+                                Text("복사")
+                                    .font(.custom("Pretendard-Bold", size: 14))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color("Blue1"))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isSummaryLoading || summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .opacity((isSummaryLoading || summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 0.6 : 1)
+                        }
+
+                        Button {
+                            closeSummary()
+                        } label: {
+                            Text("닫기")
+                                .font(.custom("Pretendard-Bold", size: 14))
+                                .foregroundColor(Color("Gray1"))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(Color.white)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .stroke(Color("Gray4"), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                    .padding(.bottom, 18)
+                }
+                .frame(maxWidth: 540)
+                .background(
+                    RoundedRectangle(cornerRadius: 22)
+                        .fill(Color.white)
+                        .shadow(color: .black.opacity(0.12), radius: 18, x: 0, y: 8)
+                )
+                .padding(.horizontal, 22)
+                .transition(.scale)
             }
 
             if isReportModalPresented {
@@ -604,6 +1044,18 @@ struct BoardDetailView: View {
 
                 // ✅ 최종값을 스토어에도 반영
                 notifyLikeChanged()
+
+                // ✅ 댓글 목록 로드
+                isCommentsLoading = true
+                commentErrorMessage = nil
+                do {
+                    let list = try await commentService.fetch(postId: post.id)
+                    comments = list
+                    notifyCommentCountChanged()
+                } catch {
+                    commentErrorMessage = "댓글을 불러오지 못했어요.\n\(error.localizedDescription)"
+                }
+                isCommentsLoading = false
             } catch {
                 detailErrorMessage = "게시글을 불러오지 못했어요.\n\(error.localizedDescription)"
             }

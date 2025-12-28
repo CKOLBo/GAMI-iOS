@@ -38,7 +38,8 @@ final class MentorService {
 
     
     func fetchRandomMentor() async throws -> MentorSummaryDTO {
-        try await APIClient.shared.request(MentorEndpoint.fetchRandomMentor)
+        let endpoint = MentorEndpoint.fetchRandomMentor
+        return try await APIClient.shared.request(endpoint)
     }
 
     

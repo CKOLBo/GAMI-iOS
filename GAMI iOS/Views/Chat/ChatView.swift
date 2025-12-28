@@ -15,10 +15,6 @@ struct ChatItem: Identifiable, Hashable {
     let generation: Int
 }
 
-struct ChatRequestItem: Identifiable, Hashable {
-    let id = UUID()
-    let name: String
-}
 
 private struct MentorRequestModal: View {
     @Binding var isPresented: Bool
@@ -38,7 +34,7 @@ private struct MentorRequestModal: View {
                         .foregroundColor(Color("Gray1"))
 
                     Text("신청 된 멘토를 확인 해주세요.")
-                        .font(.custom("Pretendard-SemiBold", size: 12))
+                        .font(.custom("Pretendard-Semi.Bold", size: 12))
                         .foregroundColor(Color("Gray3"))
                         .padding(.top, 10)
                 }
@@ -132,10 +128,8 @@ struct ChatView: View {
 
     @State private var selectedTab: Tab = .chat
     @State private var searchText: String = ""
-    @State private var requests: [ChatRequestItem] = [
-        .init(name: "문강현"),
-        .init(name: "김준표")
-    ]
+    @State private var sentApplies: [MentorApplyDTO] = []
+    @State private var cancellingApplyId: Int? = nil
     @State private var isMentorModalPresented: Bool = false
     @State private var mentorRequests: [MentorApplyDTO] = []
     @State private var selectedChat: ChatItem? = nil
@@ -174,14 +168,21 @@ struct ChatView: View {
         searchText = ""
     }
 
-    private var filteredRequests: [ChatRequestItem] {
+    private var filteredRequests: [MentorApplyDTO] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if q.isEmpty { return requests }
-        return requests.filter { $0.name.localizedCaseInsensitiveContains(q) }
+        let base = sentApplies
+        if q.isEmpty { return base }
+        return base.filter { ($0.name ?? "").localizedCaseInsensitiveContains(q) }
     }
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func onTabChanged(_ newValue: Tab) {
+        if newValue == .request {
+            loadSentApplies()
+        }
     }
 
     var body: some View {
@@ -206,7 +207,10 @@ struct ChatView: View {
                             .foregroundColor(selectedTab == .request ? Color("Gray1") : Color("Gray2"))
                             .padding(.leading, 12)
                             .contentShape(Rectangle())
-                            .onTapGesture { selectedTab = .request }
+                            .onTapGesture {
+                                selectedTab = .request
+                                loadSentApplies()
+                            }
 
                         Spacer()
 
@@ -262,7 +266,7 @@ struct ChatView: View {
                                             .frame(width: 32, height: 32)
                                             .padding(.leading, 12)
 
-                                        Text("\(item.name) 님한테 요청을 보냈어요.")
+                                        Text("\((item.name ?? "알 수 없음")) 님한테 요청을 보냈어요.")
                                             .font(.custom("Pretendard-SemiBold", size: 14))
                                             .foregroundColor(Color("Gray3"))
                                             .lineLimit(1)
@@ -271,11 +275,29 @@ struct ChatView: View {
                                         Spacer(minLength: 0)
 
                                         Button {
-                                            withAnimation(.easeInOut(duration: 0.15)) {
-                                                requests.removeAll { $0.id == item.id }
+                                            guard cancellingApplyId == nil else { return }
+                                            cancellingApplyId = Int(item.applyId)
+                                            print("➡️ PATCH /api/mentoring/apply/\(item.applyId) CANCELLED")
+
+                                            Task {
+                                                do {
+                                                    try await mentorService.patchApplyStatus(id: item.applyId, applyStatus: "CANCELLED")
+                                                    await MainActor.run {
+                                                        withAnimation(.easeInOut(duration: 0.15)) {
+                                                            sentApplies.removeAll { $0.applyId == item.applyId }
+                                                        }
+                                                        cancellingApplyId = nil
+                                                    }
+                                                    loadSentApplies()
+                                                } catch {
+                                                    await MainActor.run {
+                                                        cancellingApplyId = nil
+                                                    }
+                                                    print("요청 취소 실패:", error)
+                                                }
                                             }
                                         } label: {
-                                            Text("취소")
+                                            Text(cancellingApplyId == Int(item.applyId) ? "취소 중" : "취소")
                                                 .font(.custom("Pretendard-SemiBold", size: 12))
                                                 .foregroundColor(Color("Gray1"))
                                                 .padding(.horizontal, 14)
@@ -285,6 +307,8 @@ struct ChatView: View {
                                                         .fill(Color.white)
                                                 )
                                         }
+                                        .disabled(cancellingApplyId != nil)
+                                        .opacity(cancellingApplyId != nil ? 0.6 : 1)
                                     }
                                     .padding(.horizontal, 14)
                                     .frame(height: 56)
@@ -357,13 +381,15 @@ struct ChatView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea()
                 .task {
-               
                     do {
                         let rooms = try await chatService.fetchRooms()
                         await MainActor.run {
                             self.chats = rooms.map { r in
                                 ChatItem(id: r.id, name: r.name, lastMessage: r.lastMessage, major: r.major, generation: r.generation)
                             }
+                        }
+                        if selectedTab == .request {
+                            loadSentApplies()
                         }
                     } catch {
                         print("패치룸 에러 : ", error)
@@ -378,6 +404,7 @@ struct ChatView: View {
                     )
                 }
             }
+            .onChange(of: selectedTab, perform: onTabChanged)
             .navigationDestination(item: $selectedChat) { chat in
                 ChatRoomView(roomId: chat.id, title: chat.name)
             }
@@ -407,4 +434,24 @@ struct ChatView: View {
     }
 
     return MentorModalPreviewHost()
+}
+
+
+// Move loadSentApplies into ChatView
+
+extension ChatView {
+    private func loadSentApplies() {
+        Task {
+            do {
+                // NOTE: 프로젝트에 맞는 “내가 보낸 신청 목록” 메서드명으로 바꾸세요.
+                // 예: fetchSentApplies / fetchMySentApplies / fetchAppliedMentors 등
+                let res = try await mentorService.fetchSentApplies()
+                await MainActor.run {
+                    sentApplies = res.filter { $0.applyStatus.uppercased() == "PENDING" }
+                }
+            } catch {
+                print("보낸 요청 조회 실패:", error)
+            }
+        }
+    }
 }

@@ -69,5 +69,4 @@ typealias PostImageUploadDTO = PostImageDTO
 typealias PostCreateRequestDTO = PostCreateRequest
 typealias PostUpdateRequestDTO = PostUpdateRequest
 
-// Summary
-typealias PostSummaryResponseDTO = PostSummaryResponse
+

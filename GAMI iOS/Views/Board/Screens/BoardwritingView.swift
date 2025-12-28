@@ -18,6 +18,7 @@ struct BoardwritingView: View {
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var images: [UIImage] = []
 
+
     @State private var isSubmitting: Bool = false
     @State private var showSubmitAlert: Bool = false
     @State private var submitAlertMessage: String = ""
@@ -78,21 +79,23 @@ struct BoardwritingView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.top, 12)
 
-                            ZStack(alignment: .topLeading) {
-                                if bodyText.isEmpty {
-                                    Text("내용을 입력 해주세요")
-                                        .font(.custom("Pretendard-Regular", size: 16))
-                                        .foregroundColor(Color("Gray3"))
-                                        .padding(.top, 12)
-                                        .padding(.leading, 4)
-                                }
+                            ZStack {
+                                ZStack(alignment: .topLeading) {
+                                    if bodyText.isEmpty {
+                                        Text("내용을 입력 해주세요")
+                                            .font(.custom("Pretendard-Regular", size: 16))
+                                            .foregroundColor(Color("Gray3"))
+                                            .padding(.top, 12)
+                                            .padding(.leading, 4)
+                                    }
 
-                                TextEditor(text: $bodyText)
-                                    .font(.custom("Pretendard-Regular", size: 16))
-                                    .foregroundColor(.black)
-                                    .frame(minHeight: 260)
-                                    .scrollContentBackground(.hidden)
-                                    .background(Color.clear)
+                                    TextEditor(text: $bodyText)
+                                        .font(.custom("Pretendard-Regular", size: 16))
+                                        .foregroundColor(.black)
+                                        .frame(minHeight: 260)
+                                        .scrollContentBackground(.hidden)
+                                        .background(Color.clear)
+                                }
                             }
                             .padding(.horizontal, 32)
                             .padding(.top, 14)
@@ -167,6 +170,7 @@ struct BoardwritingView: View {
                 .disabled(isSubmitting || titleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .opacity((isSubmitting || titleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 0.5 : 1)
             }
+
         }
         .onChange(of: pickedItems) { _, newItems in
             Task {
@@ -193,6 +197,7 @@ struct BoardwritingView: View {
             pickedItems.remove(at: index)
         }
     }
+
 
     private func submitValidation() -> Bool {
         if titleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

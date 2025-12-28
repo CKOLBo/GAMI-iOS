@@ -34,7 +34,7 @@ enum PostAPI {
 
     
     struct Create: Endpoint {
-        let bodyDTO: PostCreateRequest
+        let bodyDTO: PostCreateRequestDTO
 
         var method: HTTPMethod { .post }
         var path: String { "/api/post" }
@@ -66,7 +66,7 @@ enum PostAPI {
 
     struct Update: Endpoint {
         let postId: Int
-        let bodyDTO: PostUpdateRequest
+        let bodyDTO: PostUpdateRequestDTO
 
         var method: HTTPMethod { .patch }
         var path: String { "/api/post/\(postId)" }
@@ -86,5 +86,21 @@ enum PostAPI {
 
         var method: HTTPMethod { .get }
         var path: String { "/api/post/summary/\(postId)" }
+    }
+
+    // MARK: - Like
+
+    struct Like: Endpoint {
+        let postId: Int
+
+        var method: HTTPMethod { .post }
+        var path: String { "/api/post/\(postId)/like" }
+    }
+
+    struct Unlike: Endpoint {
+        let postId: Int
+
+        var method: HTTPMethod { .delete }
+        var path: String { "/api/post/\(postId)/like" }
     }
 }

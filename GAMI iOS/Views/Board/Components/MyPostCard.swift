@@ -16,6 +16,8 @@ struct MyPostCard: View {
     let onTapReport: (() -> Void)?
     let thumbnail: Image?
 
+    @State private var isLiked: Bool = false
+
     init(
         title: String,
         preview: String,
@@ -61,12 +63,21 @@ struct MyPostCard: View {
                 .padding(.bottom, 20)
 
                 HStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        Image("Hart")
-                        Text("\(likeCount)")
+                    HStack(spacing: 6) {
+                        Button {
+                            isLiked.toggle()
+                        } label: {
+                            Image(systemName: isLiked ? "heart.fill" : "heart")
+                                .font(.system(size: 16))
+                                .foregroundColor(isLiked ? .red : Color("Gray1"))
+                        }
+                        .buttonStyle(.plain)
+
+                        Text("\(likeCount + (isLiked ? 1 : 0))")
                             .font(.custom("Pretendard-Regular", size: 12))
                             .foregroundColor(Color("Gray1"))
-                            .padding(.horizontal, 14)
+                            .padding(.leading, 6)
+                            .padding(.trailing, 14)
                     }
 
                     HStack(spacing: 0) {
@@ -126,6 +137,7 @@ struct MyPostCard: View {
         )
 
         BoardPostCard(
+            postId: 2,
             title: "GSM에서 살아남는 방법",
             preview: "제가 GSM에서 살아남는 방법을 알려 드리겠습니다!",
             likeCount: 3,
@@ -135,4 +147,3 @@ struct MyPostCard: View {
     .padding(24)
     .background(Color.white)
 }
-

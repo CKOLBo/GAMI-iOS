@@ -14,13 +14,15 @@ struct BoardPostModel: Identifiable, Hashable {
     let title: String
     let subtitle: String
     let body: String
+    let imageURLs: [String]
     let likeCount: Int
 
-    init(id: Int = -1, title: String, subtitle: String, body: String, likeCount: Int = 0) {
+    init(id: Int = -1, title: String, subtitle: String, body: String, likeCount: Int = 0, imageURLs: [String] = []) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.body = body
+        self.imageURLs = imageURLs
         self.likeCount = likeCount
     }
 
@@ -29,13 +31,16 @@ struct BoardPostModel: Identifiable, Hashable {
         title: "제목제목제목",
         subtitle: "부제목(미리보기)  내용이 들어갑니다.",
         body: "내용내용내용내용...",
-        likeCount: 3
+        likeCount: 3,
+        imageURLs: []
     )
 }
 
 struct BoardDetailView: View {
     let post: BoardPostModel
     private let postService = PostService()
+    // ✅ 앱 전역(공유) 좋아요 상태 저장소 (Home / BoardHome / Detail 공통)
+    @StateObject private var likeStore = BoardLikeStore.shared
     @State private var detail: BoardPostDetailDTO? = nil
     @State private var isDetailLoading: Bool = false
     @State private var detailErrorMessage: String? = nil
@@ -44,6 +49,8 @@ struct BoardDetailView: View {
     @State private var comments: [String] = []
     @State private var likeCount: Int
     @State private var isLiked: Bool = false
+    @State private var isLikeLoading: Bool = false
+    @State private var likeErrorMessage: String? = nil
     @FocusState private var isCommentFocused: Bool
 
     @State private var isReportModalPresented: Bool = false
@@ -62,12 +69,116 @@ struct BoardDetailView: View {
 
     init(post: BoardPostModel) {
         self.post = post
-        self._likeCount = State(initialValue: post.likeCount)
+        // ✅ Store 값이 있으면 그게 우선(다른 화면에서 이미 눌렀을 수 있음)
+        let storedCount = BoardLikeStore.shared.likeCount(for: post.id, fallback: post.likeCount)
+        let storedLiked = BoardLikeStore.shared.isLiked(post.id)
+        self._likeCount = State(initialValue: storedCount)
+        self._isLiked = State(initialValue: storedLiked)
     }
 
 
     private var displayTitle: String { detail?.title ?? post.title }
     private var displayBody: String { detail?.content ?? post.body }
+
+    // MARK: - Images (best-effort extraction)
+
+    private var displayImageURLs: [String] {
+        let detailURLs = extractImageURLs(from: detail)
+        if !detailURLs.isEmpty { return detailURLs }
+        return post.imageURLs
+    }
+
+    /// BoardPostDetailDTO의 필드 구조가 보이는 범위 밖일 수 있어서, 런타임 리플렉션으로 images[*].imageUrl을 최대한 뽑아냄
+    private func extractImageURLs(from value: Any?) -> [String] {
+        guard let value else { return [] }
+
+        // detail.images
+        let m = Mirror(reflecting: value)
+        guard let imagesAny = m.children.first(where: { $0.label == "images" })?.value else {
+            return []
+        }
+
+        // images: [Something]
+        var urls: [String] = []
+
+        // Swift 배열은 Any로 캐스팅이 잘 안 될 수 있어서 Mirror로 한 번 더 순회
+        let imagesMirror = Mirror(reflecting: imagesAny)
+        if imagesMirror.displayStyle == .collection {
+            for child in imagesMirror.children {
+                let item = child.value
+
+                // images가 [String]인 경우
+                if let s = item as? String {
+                    urls.append(s)
+                    continue
+                }
+
+                let itemMirror = Mirror(reflecting: item)
+
+                // imageUrl 또는 url
+                if let url = itemMirror.children.first(where: { $0.label == "imageUrl" })?.value as? String {
+                    urls.append(url)
+                } else if let url = itemMirror.children.first(where: { $0.label == "url" })?.value as? String {
+                    urls.append(url)
+                }
+            }
+        }
+
+        return urls
+    }
+
+    // ✅ BoardPostDetailDTO 안에 "내가 좋아요 했는지" 필드명이 프로젝트마다 달라서, 리플렉션으로 최대한 Bool을 찾아봄
+    private func extractIsLiked(from value: Any?) -> Bool? {
+        guard let value else { return nil }
+
+        let m = Mirror(reflecting: value)
+        let candidates = [
+            "isLiked", "liked", "likedByMe", "myLike", "isLike", "likeYn", "isLikeYn", "likeStatus"
+        ]
+
+        for key in candidates {
+            if let v = m.children.first(where: { $0.label == key })?.value {
+                if let b = v as? Bool { return b }
+                if let i = v as? Int { return i != 0 }
+                if let s = v as? String {
+                    let lower = s.lowercased()
+                    if lower == "y" || lower == "yes" || lower == "true" || lower == "1" { return true }
+                    if lower == "n" || lower == "no" || lower == "false" || lower == "0" { return false }
+                }
+            }
+        }
+
+        return nil
+    }
+
+    // ✅ APIClient 에러 타입이 프로젝트마다 다를 수 있어서, 문자열 기반으로 HTTP 상태코드를 최대한 판별
+    private func isHTTPStatus(_ error: Error, _ code: Int) -> Bool {
+        let desc = String(describing: error)
+        if desc.contains("httpStatus(\(code)") { return true }
+        if desc.contains("status=\(code)") { return true }
+        if error.localizedDescription.contains("HTTP \(code)") { return true }
+        return false
+    }
+
+
+    @MainActor
+    private func notifyLikeChanged() {
+        guard post.id > 0 else { return }
+
+        // ✅ Store 갱신 (Single Source of Truth)
+        likeStore.apply(postId: post.id, isLiked: isLiked, likeCount: likeCount)
+
+        // ✅ 모든 화면에 동기화 신호
+        NotificationCenter.default.post(
+            name: Notification.Name("boardLikeChanged"),
+            object: nil,
+            userInfo: [
+                "postId": post.id,
+                "isLiked": isLiked,
+                "likeCount": likeCount
+            ]
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -115,6 +226,15 @@ struct BoardDetailView: View {
                     .padding(.trailing, 32)
             }
 
+            if let likeErrorMessage {
+                Text(likeErrorMessage)
+                    .font(.custom("Pretendard-Medium", size: 12))
+                    .foregroundColor(.red)
+                    .padding(.leading, 32)
+                    .padding(.top, 6)
+                    .padding(.trailing, 32)
+            }
+
             Text(displayTitle)
                 .font(.custom("Pretendard-Bold", size: 24))
                 .foregroundColor(Color("Gray1"))
@@ -142,6 +262,42 @@ struct BoardDetailView: View {
                     .padding(.top, 16)
             }
 
+            // ✅ 게시글 이미지 (서버 imageUrl)
+            if !displayImageURLs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(displayImageURLs, id: \.self) { urlString in
+                            if let url = URL(string: urlString) {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .empty:
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color("Gray4"))
+                                            .opacity(0.25)
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                    case .failure:
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color("Gray4"))
+                                            .opacity(0.25)
+                                    @unknown default:
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color("Gray4"))
+                                            .opacity(0.25)
+                                    }
+                                }
+                                .frame(width: 260, height: 180)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                }
+            }
+
             Text(displayBody)
                 .font(.custom("Pretendard-Medium", size: 14))
                 .foregroundColor(Color("Gray1"))
@@ -151,27 +307,98 @@ struct BoardDetailView: View {
             
             HStack(spacing: 0) {
                 Button {
-                    if isLiked {
-                        isLiked = false
-                        likeCount = max(0, likeCount - 1)
-                    } else {
-                        isLiked = true
+                    guard post.id > 0 else {
+                        likeErrorMessage = "postId가 올바르지 않아요. (id=\(post.id))"
+                        print("❌ like tap blocked: invalid postId=", post.id)
+                        return
+                    }
+                    guard !isLikeLoading else { return }
+
+                    likeErrorMessage = nil
+
+                    let nextLiked = !isLiked
+                    print("❤️ like tap postId=\(post.id) nextLiked=\(nextLiked)")
+
+                    // ✅ Optimistic UI
+                    isLiked = nextLiked
+                    if nextLiked {
                         likeCount += 1
+                    } else {
+                        likeCount = max(0, likeCount - 1)
+                    }
+                    notifyLikeChanged()
+
+                    isLikeLoading = true
+                    Task {
+                        do {
+                            if nextLiked {
+                                print("➡️ like API / postId=\(post.id)")
+                                try await postService.likePost(postId: post.id)
+                            } else {
+                                print("➡️ unlike API / postId=\(post.id)")
+                                try await postService.unlikePost(postId: post.id)
+                            }
+                            await MainActor.run {
+                                isLikeLoading = false
+                            }
+                            // NOTE: Do NOT re-fetch detail immediately here.
+                            // The server may return stale likeCount right after mutation, which overwrites our optimistic UI.
+                            // Home sync is handled via NotificationCenter (`notifyLikeChanged()`).
+                            print("✅ like API success postId=\(post.id) liked=\(nextLiked) likeCount=\(likeCount)")
+                        } catch {
+                            await MainActor.run {
+                                // 서버가 이미 해당 상태인 경우(409/404)는 "성공"으로 보고 로컬 상태 유지
+                                if nextLiked {
+                                    if isHTTPStatus(error, 409) {
+                                        // already liked
+                                        isLiked = true
+                                        likeErrorMessage = nil
+                                        isLikeLoading = false
+                                        notifyLikeChanged()
+                                        return
+                                    }
+                                } else {
+                                    if isHTTPStatus(error, 404) || isHTTPStatus(error, 409) {
+                                        // already unliked
+                                        isLiked = false
+                                        likeErrorMessage = nil
+                                        isLikeLoading = false
+                                        notifyLikeChanged()
+                                        return
+                                    }
+                                }
+
+                                // 그 외 진짜 실패면 롤백
+                                isLiked.toggle()
+                                if nextLiked {
+                                    likeCount = max(0, likeCount - 1)
+                                } else {
+                                    likeCount += 1
+                                }
+                                notifyLikeChanged()
+                                likeErrorMessage = "좋아요 처리에 실패했어요.\n\(error.localizedDescription)"
+                                isLikeLoading = false
+                            }
+                            print("❌ 디테일 좋아요 서버통신 실패:", error)
+                        }
                     }
                 } label: {
-                    Image("Hart")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 17, height: 14)
+                    HStack(spacing: 0) {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .font(.system(size: 16))
+                            .foregroundColor(isLiked ? .red : Color("Gray1"))
+
+                        Text("\(likeCount)")
+                            .font(.custom("Pretendard-Regular", size: 12))
+                            .foregroundColor(Color("Gray1"))
+                            .padding(.horizontal, 14)
+                    }
                 }
                 .buttonStyle(.plain)
+                .disabled(isLikeLoading)
                 .padding(.leading, 40)
                 .padding(.top, 10)
                 .padding(.trailing, 10)
-
-                Text("\(likeCount)")
-                    .padding(.top, 10)
-                    .padding(.trailing, 36)
 
                 Button {
                     reportTargetComment = nil
@@ -358,8 +585,25 @@ struct BoardDetailView: View {
                 let res = try await postService.fetchPostDetail(postId: post.id)
                 print("디테일 코드 에러러ㅓ=\(res.title) like=\(res.likeCount)")
                 detail = res
-              
-                likeCount = res.likeCount
+
+                // ✅ 서버값이 와도, 이미 다른 화면에서 눌린 값(스토어)이 있으면 그걸 우선
+                let storeCount = likeStore.likeCount(for: post.id, fallback: res.likeCount)
+                let storeLiked = likeStore.isLiked(post.id)
+
+                likeCount = storeCount
+
+                if storeLiked {
+                    // 스토어가 liked=true면 무조건 true
+                    isLiked = true
+                } else if let liked = extractIsLiked(from: res) {
+                    // 스토어가 false면 서버가 제공하는 liked를 최대한 반영
+                    isLiked = liked
+                } else {
+                    isLiked = false
+                }
+
+                // ✅ 최종값을 스토어에도 반영
+                notifyLikeChanged()
             } catch {
                 detailErrorMessage = "게시글을 불러오지 못했어요.\n\(error.localizedDescription)"
             }
@@ -369,6 +613,24 @@ struct BoardDetailView: View {
         .background(Color.white)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("boardLikeChanged"))) { note in
+            guard let info = note.userInfo else { return }
+            guard let postId = info["postId"] as? Int else { return }
+            guard postId == post.id else { return }
+
+            let liked = (info["isLiked"] as? Bool) ?? (info["liked"] as? Bool) ?? false
+            let count = (info["likeCount"] as? Int) ?? likeCount
+
+            // ✅ 스토어 + 로컬 UI 동기화
+            likeStore.apply(postId: postId, isLiked: liked, likeCount: count)
+            isLiked = liked
+            likeCount = count
+        }
+        .onDisappear {
+            Task { @MainActor in
+                notifyLikeChanged()
+            }
+        }
     }
 
 
@@ -522,3 +784,4 @@ private struct ReportPostModalView: View {
 #Preview {
     BoardDetailView(post: .sample)
 }
+

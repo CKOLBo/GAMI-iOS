@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import UIKit
 
 struct BoardwritingView: View {
     @Environment(\.dismiss) private var dismiss
@@ -280,23 +281,197 @@ struct BoardwritingView: View {
     private func submitPost() async {
         guard submitValidation() else { return }
 
-        isSubmitting = true
-        defer { isSubmitting = false }
+        await MainActor.run {
+            isSubmitting = true
+        }
+        defer {
+            Task { @MainActor in
+                isSubmitting = false
+            }
+        }
+
+        let title = titleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 1) 이미지 업로드 -> imageUrl 목록 획득
+        let uploadedImageURLs: [String]
+        do {
+            uploadedImageURLs = try await uploadPostImages(images)
+        } catch {
+            print("❌ 이미지 업로드 실패:")
+            print(String(describing: error))
+            await MainActor.run {
+                submitAlertMessage = "이미지 업로드에 실패했습니다"
+                showSubmitAlert = true
+            }
+            return
+        }
+
+        // 2) 업로드된 URL을 DTO로 변환 (sequence는 0부터)
+        let imageDTOs: [PostImageDTO] = uploadedImageURLs.enumerated().map { idx, url in
+            PostImageDTO(imageUrl: url, sequence: idx)
+        }
+
+        let requestDTO = PostCreateRequest(
+            title: title,
+            content: content,
+            images: imageDTOs
+        )
+        
 
         do {
-            let paths = try await saveImagesToDisk()
-            try savePostLocally(
-                title: titleText.trimmingCharacters(in: .whitespacesAndNewlines),
-                body: bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
-                imagePaths: paths
+            print("➡️ POST /api/post title=\(title)")
+
+            // ✅ PostAPI에 create가 없어서 로컬 Endpoint로 직접 POST
+            struct CreatePostEndpoint: Endpoint {
+                let bodyDTO: PostCreateRequest
+
+                var method: HTTPMethod { .post }
+                var path: String { "/api/post" }
+
+                var headers: [String : String] {
+                    var h: [String: String] = [
+                        "Content-Type": "application/json"
+                    ]
+                    if let token = UserDefaults.standard.string(forKey: "accessToken"), !token.isEmpty {
+                        h["Authorization"] = "Bearer \(token)"
+                    }
+                    return h
+                }
+
+                var body: Data? {
+                    try? JSONEncoder().encode(bodyDTO)
+                }
+            }
+
+            struct EmptyResponse: Decodable {}
+            let _: EmptyResponse = try await APIClient.shared.request(
+                CreatePostEndpoint(bodyDTO: requestDTO)
             )
 
-            submitAlertMessage = "등록되었습니다"
-            showSubmitAlert = true
+            await MainActor.run {
+                submitAlertMessage = "등록되었습니다"
+                showSubmitAlert = true
+            }
         } catch {
-            submitAlertMessage = "등록에 실패했습니다"
-            showSubmitAlert = true
+            print("❌ POST 실패:", error)
+            await MainActor.run {
+                submitAlertMessage = "등록에 실패했습니다"
+                showSubmitAlert = true
+            }
         }
+    }
+    // MARK: - Image Upload (multipart)
+
+    private struct PostImageUploadResponse: Decodable {
+        let imageUrl: String
+    }
+
+    // MARK: - Image Compression Helpers
+
+    /// 이미지 최대 변 길이를 제한하며 리사이즈
+    private func resizedImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let w = image.size.width
+        let h = image.size.height
+        guard w > 0, h > 0 else { return image }
+
+        let maxSide = max(w, h)
+        guard maxSide > maxDimension else { return image }
+
+        let scale = maxDimension / maxSide
+        let newSize = CGSize(width: w * scale, height: h * scale)
+
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
+
+    /// 목표 바이트 이하가 될 때까지 JPEG 품질을 단계적으로 낮춰서 Data 생성
+    private func compressedJPEGData(from image: UIImage, maxDimension: CGFloat, maxBytes: Int) -> Data? {
+        let resized = resizedImage(image, maxDimension: maxDimension)
+
+        // 품질을 점진적으로 낮춤 (0.85 -> 0.35)
+        var quality: CGFloat = 0.85
+        let minQuality: CGFloat = 0.35
+        let step: CGFloat = 0.08
+
+        while quality >= minQuality {
+            if let data = resized.jpegData(compressionQuality: quality) {
+                if data.count <= maxBytes {
+                    return data
+                }
+            }
+            quality -= step
+        }
+
+        // 마지막 시도 (더 강하게)
+        return resized.jpegData(compressionQuality: 0.3)
+    }
+
+    private func uploadPostImages(_ uiImages: [UIImage]) async throws -> [String] {
+        guard !uiImages.isEmpty else { return [] }
+
+        var urls: [String] = []
+        urls.reserveCapacity(uiImages.count)
+
+        for (idx, img) in uiImages.enumerated() {
+            // ✅ 서버 업로드 용량 제한 대응: 리사이즈 + JPEG 재압축
+            guard let data = compressedJPEGData(from: img, maxDimension: 1024, maxBytes: 900_000) else {
+                continue
+            }
+            print("📸 upload 준비 idx=\(idx) bytes=\(data.count)")
+            let url = try await uploadSinglePostImage(
+                data: data,
+                filename: "post_\(idx).jpg",
+                mimeType: "image/jpeg"
+            )
+            urls.append(url)
+        }
+
+        return urls
+    }
+
+    private func uploadSinglePostImage(data: Data, filename: String, mimeType: String) async throws -> String {
+        // ✅ API 문서 기준: POST /api/post/images (multipart), 필드명: image
+        struct UploadPostImageEndpoint: Endpoint {
+            let multipartBody: Data
+            let boundary: String
+
+            var method: HTTPMethod { .post }
+            var path: String { "/api/post/images" }
+
+            var headers: [String : String] {
+                var h: [String: String] = [
+                    "Content-Type": "multipart/form-data; boundary=\(boundary)"
+                ]
+                if let token = UserDefaults.standard.string(forKey: "accessToken"), !token.isEmpty {
+                    h["Authorization"] = "Bearer \(token)"
+                }
+                return h
+            }
+
+            var body: Data? { multipartBody }
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+
+        // --boundary\r\n
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n".data(using: .utf8)!)
+        // --boundary--\r\n
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        print("⬆️ POST /api/post/images file=\(filename) bytes=\(data.count)")
+        let res: PostImageUploadResponse = try await APIClient.shared.request(
+            UploadPostImageEndpoint(multipartBody: body, boundary: boundary)
+        )
+        print("✅ 업로드 성공 url=\(res.imageUrl)")
+        return res.imageUrl
     }
 
     private func loadImages(from items: [PhotosPickerItem]) async {

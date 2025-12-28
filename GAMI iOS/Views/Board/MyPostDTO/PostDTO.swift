@@ -24,7 +24,7 @@ struct PostItemDTO: Decodable, Identifiable, Hashable {
     let id: Int
     let title: String
     let content: String
-    let likeCount: Int
+    var likeCount: Int
     let commentCount: Int
     let memberId: Int
     let createdAt: String
@@ -54,3 +54,20 @@ struct PostSummaryResponse: Decodable {
     let postId: Int
     let summary: String
 }
+
+// MARK: - Board module aliases (used by BoardHomeView / BoardDetailView / PostService)
+
+// List
+typealias BoardPostItemDTO = PostItemDTO
+typealias BoardPostListResponseDTO = PostListResponse
+
+// Detail
+typealias BoardPostDetailDTO = PostDetailDTO
+
+// Create / Update
+typealias PostImageUploadDTO = PostImageDTO
+typealias PostCreateRequestDTO = PostCreateRequest
+typealias PostUpdateRequestDTO = PostUpdateRequest
+
+// Summary
+typealias PostSummaryResponseDTO = PostSummaryResponse

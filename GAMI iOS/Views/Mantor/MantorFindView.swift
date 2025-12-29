@@ -600,6 +600,12 @@ struct MentorFindView: View {
             applyAlertMessage = "멘토 신청이 완료되었어요."
             showApplyAlert = true
         } catch {
+            if isHTTP409(error) {
+                applyAlertMessage = "이미 신청한 멘토예요.\n채팅 > 요청에서 확인해보세요."
+                showApplyAlert = true
+                return
+            }
+
             applyAlertMessage = error.localizedDescription
             showApplyAlert = true
         }

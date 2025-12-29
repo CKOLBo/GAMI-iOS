@@ -4,7 +4,6 @@
 //
 //  Created by 김준표 on 12/28/25.
 //
-
 import Foundation
 
 enum ChatEndpoint: Endpoint {

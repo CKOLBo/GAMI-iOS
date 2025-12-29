@@ -40,6 +40,7 @@ struct ChatRoomView: View {
     @State private var nextCursor: Int? = nil
     @State private var hasMore: Bool = true
     @State private var pendingSends: [String] = []
+    @State private var didRequestSubscribe: Bool = false
 
     @StateObject private var socket = ChatSocketService()
 
@@ -102,7 +103,16 @@ struct ChatRoomView: View {
                             .background(Color.white)
                     }
                     .onReceive(socket.$state) { st in
-                   
+                        // 연결되면 딱 1번만 subscribe
+                        if case .connected = st {
+                            if !didRequestSubscribe {
+                                didRequestSubscribe = true
+                                socket.subscribe(roomId: roomId)
+                            }
+                            return
+                        }
+
+                        // subscribe 완료되면 pending send flush
                         if case .subscribed(let rid) = st, rid == roomId {
                             guard !pendingSends.isEmpty else { return }
                             let toSend = pendingSends
@@ -141,15 +151,16 @@ struct ChatRoomView: View {
             await loadInitial(scrollToBottom: true)
         }
         .onAppear {
-          
             let token = UserDefaults.standard.string(forKey: "accessToken") ?? ""
-            if token.isEmpty {
-                print("공백 에러")
+            guard !token.isEmpty else {
+                print("❌ accessToken 비어서 소켓 연결 안 함")
+                return
             }
+
+            didRequestSubscribe = false
 
             socket.onMessage = { incoming in
                 DispatchQueue.main.async {
-                   
                     if self.messages.contains(where: { $0.id == incoming.messageId }) {
                         return
                     }
@@ -159,29 +170,17 @@ struct ChatRoomView: View {
                         text: incoming.message,
                         isMe: (incoming.senderId == self.currentUserId && self.currentUserId != 0),
                         senderName: incoming.senderName,
-                        createdAt: incoming.createdAt
+                        createdAt: incoming.createdAt ?? ""
                     )
                     self.messages.append(ui)
                 }
             }
 
-          
             socket.connect(accessToken: token)
-
-        
-            Task {
-                while true {
-                    if Task.isCancelled { return }
-                    if case .connected = socket.state {
-                        socket.subscribe(roomId: roomId)
-                        return
-                    }
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-                }
-            }
         }
         .onDisappear {
             socket.disconnect()
+            didRequestSubscribe = false
         }
     }
 

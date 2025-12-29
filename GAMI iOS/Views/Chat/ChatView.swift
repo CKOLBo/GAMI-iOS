@@ -34,7 +34,7 @@ private struct MentorRequestModal: View {
                         .foregroundColor(Color("Gray1"))
 
                     Text("신청 된 멘토를 확인 해주세요.")
-                        .font(.custom("Pretendard-Semi.Bold", size: 12))
+                        .font(.custom("Pretendard-SemiBold", size: 12))
                         .foregroundColor(Color("Gray3"))
                         .padding(.top, 10)
                 }
@@ -76,6 +76,7 @@ private struct MentorRequestModal: View {
                                                 withAnimation(.easeInOut(duration: 0.15)) {
                                                     items.removeAll { $0.applyId == item.applyId }
                                                 }
+                                                isPresented = false
                                             }
                                         } catch {
                                             print(error)
@@ -149,23 +150,24 @@ struct ChatView: View {
     }
     @MainActor
     private func handleAccept(_ item: MentorApplyDTO) {
-        let rawName = (item.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let chatName = rawName.isEmpty ? "멘티" : rawName
-        if chats.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == chatName }) {
-            if let idx = chats.firstIndex(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == chatName }) {
-                let existing = chats.remove(at: idx)
-                chats.insert(existing, at: 0)
-            }
-            selectedTab = .chat
-            searchText = ""
-            return
-        }
-        chats.insert(
-            ChatItem(id: -Int(item.applyId), name: chatName, lastMessage: "멘토링이 시작되었어요.", major: "", generation: 0),
-            at: 0
-        )
+        // 서버에서 실제 채팅방이 생성/노출되는 흐름이라면, 로컬 더미를 만들지 말고
+        // rooms를 다시 받아와서 리스트를 동기화하는 게 정답.
+        isMentorModalPresented = false
         selectedTab = .chat
         searchText = ""
+
+        Task {
+            do {
+                let rooms = try await chatService.fetchRooms()
+                await MainActor.run {
+                    self.chats = rooms.map { r in
+                        ChatItem(id: r.id, name: r.name, lastMessage: r.lastMessage, major: r.major, generation: r.generation)
+                    }
+                }
+            } catch {
+                print("채팅방 목록 갱신 실패:", error)
+            }
+        }
     }
 
     private var filteredRequests: [MentorApplyDTO] {
